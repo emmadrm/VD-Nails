@@ -1,7 +1,7 @@
 
 /* Full-Page */
 body {
-    backdrop-filter: blur(150px);
+    backdrop-filter: blur(100px);
     background: linear-gradient(0deg,rgba(110, 80, 52, 1) 0%, rgba(196, 164, 132, 1) 100%);
 }
 
@@ -61,7 +61,7 @@ body {
   margin: 10px 0;
 }
 .mirror-button {
-  background: linear-gradient(135deg, #a0a0a0 0%, #808080 100%);
+  background: linear-gradient(135deg, #c9c8c8 0%, #a9a6a6 100%);
   color: #1d1c1c !important;
   font-size: 1.2rem;
   font-weight: 600;
@@ -543,4 +543,700 @@ footer .logo-image {
   .compact-actions {
     flex-direction: column;
   }
+}
+
+/* E-shop page */
+
+.shop-wrapper {
+  background-color: #faf8f5; 
+  min-height: 100vh;
+  padding: 40px 8%;
+  color: #3b2b1f;
+}
+
+.shop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 50px;
+  border-bottom: 1px solid #eaddd3;
+  padding-bottom: 20px;
+}
+
+.shop-title {
+  font-size: 3.5rem;
+  font-family: 'Georgia', serif;
+  margin: 0;
+  color: #3b2b1f;
+}
+
+.shop-subtitle {
+  font-size: 1.1rem;
+  color: #8c7b6c;
+  margin: 5px 0 0 0;
+}
+
+.cart-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 10px;
+}
+
+.cart-toggle-btn svg {
+  width: 32px;
+  height: 32px;
+  stroke: #3b2b1f;
+  transition: transform 0.3s ease;
+}
+
+.cart-toggle-btn:hover svg {
+  transform: scale(1.3);
+}
+
+.cart-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: #d4c4b7;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: bold;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 30px;
+}
+
+.product-card {
+  background: transparent;
+  transition: transform 0.3s ease;
+}
+
+.product-image-container {
+  position: relative;
+  border-radius: 15px;
+  overflow: hidden;
+  background: #fff;
+  aspect-ratio: 4/5;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.04);
+}
+
+.product-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.product-card:hover .product-image {
+  transform: scale(1.05);
+}
+
+.add-to-cart-btn {
+  position: absolute;
+  bottom: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #3b2b1f;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 25px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.3s ease;
+  width: 80%;
+}
+
+.product-card:hover .add-to-cart-btn {
+  bottom: 20px;
+  opacity: 1;
+}
+
+.add-to-cart-btn:hover {
+  background-color: #d4c4b7;
+}
+
+.product-info {
+  text-align: center;
+  padding-top: 15px;
+}
+
+.product-category {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #a89a8e;
+}
+
+.product-name {
+  font-size: 1.1rem;
+  margin: 5px 0;
+  font-family: 'Georgia', serif;
+}
+
+.product-price {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #3b2b1f;
+}
+
+.cart-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 998;
+}
+
+.cart-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cart-sidebar {
+  position: fixed;
+  top: 0;
+  right: -450px;
+  width: 100%;
+  max-width: 400px;
+  height: 100vh;
+  background: #fff;
+  z-index: 999;
+  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+  transition: right 0.4s cubic-bezier(0.82, 0.085, 0.395, 0.895);
+  display: flex;
+  flex-direction: column;
+}
+
+.cart-sidebar.open {
+  right: 0;
+}
+
+.cart-header {
+  padding: 25px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cart-header h2 {
+  margin: 0;
+  font-family: 'Georgia', serif;
+}
+
+.close-cart-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #8c7b6c;
+}
+
+.cart-items {
+  flex: 1;
+  overflow-y: auto;
+  padding: 25px;
+}
+
+.empty-cart-msg {
+  text-align: center;
+  color: #8c7b6c;
+  margin-top: 50px;
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.cart-item img {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.cart-item-details h4 {
+  margin: 0 0 5px 0;
+  font-size: 1rem;
+}
+
+.cart-item-details p {
+  margin: 0;
+  color: #8c7b6c;
+}
+
+.remove-item-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.remove-item-btn:hover {
+  opacity: 1;
+}
+
+.cart-footer {
+  padding: 25px;
+  border-top: 1px solid #eee;
+  background: #faf8f5;
+}
+
+.cart-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.3rem;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.checkout-btn {
+  width: 100%;
+  padding: 18px;
+  background-color: #3b2b1f;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.checkout-btn:hover {
+  background-color: #d4c4b7;
+}
+
+@media (max-width: 1024px) {
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+  }
+  .shop-title {
+    font-size: 2.8rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .shop-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+  .add-to-cart-btn {
+    opacity: 1;
+    bottom: 10px;
+  }
+}
+
+/* --- ΣΕΛΙΔΑ CHECKOUT --- */
+
+.checkout-wrapper {
+  background-color: #faf8f5;
+  min-height: 100vh;
+  padding: 40px 8%;
+  color: #3b2b1f;
+}
+
+.checkout-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.checkout-header h1 {
+  font-size: 3rem;
+  font-family: 'Georgia', serif;
+  margin: 0;
+}
+
+.checkout-header p {
+  color: #8c7b6c;
+}
+
+.checkout-container {
+  display: flex;
+  gap: 40px;
+  max-width: 1100px;
+  margin: 0 auto;
+  align-items: flex-start;
+}
+
+/* Αριστερή Στήλη */
+.payment-section {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.checkout-block {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+}
+
+.checkout-block h3 {
+  margin-top: 0;
+  font-family: 'Georgia', serif;
+  border-bottom: 1px solid #f0e9e4;
+  padding-bottom: 15px;
+  margin-bottom: 25px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #5c4a3d;
+}
+
+.form-group input {
+  padding: 15px;
+  border: 1px solid #eaddd3;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+  background: #faf8f5;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #3b2b1f;
+  background: #ffffff;
+}
+
+/* Διάταξη πεδίων δίπλα-δίπλα για μεγαλύτερες οθόνες */
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+/* Στα κινητά τα βάζουμε το ένα κάτω από το άλλο για να μην στριμώχνονται */
+@media (max-width: 600px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+/* Mock Stripe Fields */
+.stripe-info {
+  font-size: 0.85rem;
+  color: #8c7b6c;
+  margin-bottom: 20px;
+}
+
+.card-inputs-wrapper {
+  display: flex;
+  border: 1px solid #eaddd3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card-inputs-wrapper input {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.card-number {
+  flex: 2;
+  border-right: 1px solid #eaddd3 !important;
+}
+
+.card-expiry {
+  flex: 1;
+  border-right: 1px solid #eaddd3 !important;
+}
+
+.card-cvc {
+  flex: 1;
+}
+
+.pay-now-btn {
+  width: 100%;
+  padding: 18px;
+  background-color: #3b2b1f;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.3s;
+  margin-top: 20px;
+}
+
+.pay-now-btn:hover {
+  background-color: #d4c4b7;
+}
+
+/* Δεξιά Στήλη */
+.summary-section {
+  flex: 1;
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+  position: sticky;
+  top: 40px;
+}
+
+.summary-section h3 {
+  margin-top: 0;
+  font-family: 'Georgia', serif;
+  margin-bottom: 25px;
+}
+
+.summary-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.sum-item-info {
+  display: flex;
+  gap: 10px;
+}
+
+.sum-qty {
+  color: #8c7b6c;
+}
+
+.sum-price {
+  font-weight: bold;
+}
+
+.summary-divider {
+  height: 1px;
+  background: #eaddd3;
+  margin: 20px 0;
+}
+
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.3rem;
+  font-weight: bold;
+  margin-bottom: 30px;
+}
+
+.secure-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #8c7b6c;
+  font-size: 0.85rem;
+}
+
+.secure-badge svg {
+  width: 18px;
+  height: 18px;
+  stroke: #8c7b6c;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .checkout-container {
+    flex-direction: column-reverse; /* Στα κινητά η σύνοψη πάει πάνω από την πληρωμή! */
+  }
+  .payment-section, .summary-section {
+    width: 100%;
+  }
+}
+
+/* --- EXTRA ΣΤΥΛ ΓΙΑ ΤΟ ΤΕΛΕΙΟ CHECKOUT (BOXNOW / ΚΑΡΤΕΣ) --- */
+
+/* Κάρτες Επιλογής Τρόπου Αποστολής */
+.shipping-methods-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.shipping-method-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border: 2px solid #eaddd3;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #faf8f5;
+}
+
+.shipping-method-card:hover {
+  border-color: #cbbab0;
+}
+
+/* Όταν η κάρτα είναι επιλεγμένη */
+.shipping-method-card.selected {
+  border-color: #3b2b1f;
+  background: #ffffff;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.shipping-method-card input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #3b2b1f; /* Κάνει το radio button καφέ */
+  cursor: pointer;
+}
+
+.shipping-method-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.method-title {
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.method-desc {
+  font-size: 0.85rem;
+  color: #8c7b6c;
+}
+
+.method-price {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+/* BoxNow Πεδία */
+.boxnow-instructions {
+  color: #5c4a3d;
+  margin-bottom: 15px;
+}
+
+.boxnow-map-btn {
+  width: 100%;
+  padding: 15px;
+  background-color: #10b981; /* Το χαρακτηριστικό πράσινο της BoxNow */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.boxnow-map-btn:hover {
+  background-color: #059669;
+}
+
+.boxnow-selected-locker {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #ecfdf5; /* Απαλό πράσινο φόντο */
+  border: 1px solid #10b981;
+  border-radius: 8px;
+  color: #065f46;
+  font-size: 0.95rem;
+}
+
+/* Textarea Σχολίων */
+textarea {
+  padding: 15px;
+  border: 1px solid #eaddd3;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical; /* Επιτρέπει στον χρήστη να το μεγαλώσει μόνο προς τα κάτω */
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #3b2b1f;
+}
+
+/* Checkbox Όρων Χρήσης */
+.terms-checkbox {
+  margin-top: 30px;
+  margin-bottom: 15px;
+}
+
+.terms-checkbox label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: #5c4a3d;
+}
+
+.terms-checkbox input {
+  margin-top: 3px;
+  accent-color: #3b2b1f;
+}
+
+.terms-checkbox a {
+  color: #3b2b1f;
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+/* Ανάλυση Συνόλου (Μερικό / Μεταφορικά) */
+.summary-costs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #5c4a3d;
+  font-size: 0.95rem;
+}
+
+.cost-row {
+  display: flex;
+  justify-content: space-between;
 }

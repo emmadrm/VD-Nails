@@ -5,6 +5,10 @@ import Contact from './pages/Contact.jsx';
 import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 import Booking from './pages/Booking.jsx';
+import Checkout from './pages/Checkout.jsx';
+import Terms from './components/Terms.jsx';
+import Privacy from './components/Privacy.jsx';
+
 
 import './index.css';
 
@@ -21,6 +25,9 @@ function App() {
           <Route path="/eshop" element={<Eshop />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/booking" element={<Booking />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
         </Routes>
         <Footer />
       </BrowserRouter>

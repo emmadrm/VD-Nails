@@ -8,10 +8,7 @@ function Footer() {
       <div className="container"> 
             <footer className="d-flex flex-wrap justify-content-between align-items-center py-3 border-top"> 
                 <div className="col-md-4 d-flex align-items-center"> 
-                    <a href="/" className="mb-3 me-2 mb-md-0 text-decoration-none lh-1" aria-label="VD Nails"> 
-                        <img src={VDLogo} className="logo-image"alt="VD Nails Logo" width="25" height="20"/>
-                    </a> 
-                    <h6 className="mb-3 mb-md-0" style={{ color: 'white' }}>© 2026 VD Nails, Inc</h6> 
+                    <h6 className="mb-3 mb-md-0" style={{ color: 'white' }}>&copy; {new Date().getFullYear()} VD Nails. All rights reserved.</h6> 
                 </div> 
                 <ul className="nav col-md-4 justify-content-end list-unstyled d-flex"> 
                     <li className="ms-3">

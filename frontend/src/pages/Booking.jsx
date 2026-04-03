@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import '../index.css'; 
+import { Link } from 'react-router-dom';
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import el from 'date-fns/locale/el'; 
@@ -97,7 +98,7 @@ export default function Booking() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="payment" value="store" checked={formData.payment === 'store'} onChange={handleChange} required />
-                Πληρωμή στο Κατάστημα
+                Πληρωμή στο Κατάστημα (Προκαταβολή 5€)
               </label>
             </div>
           </div>
@@ -138,9 +139,11 @@ export default function Booking() {
             </div>
           </div>
 
-          <button type="submit" className="icon-link">
-            Επιβεβαίωση Κράτησης
-          </button>
+          <Link to="/checkout">
+            <button type="submit" className="icon-link">
+                Επιβεβαίωση Κράτησης
+              </button>
+          </Link>
         </form>
       </div>
     </div>
