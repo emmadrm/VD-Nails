@@ -1,38 +1,116 @@
 import React, { useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
-function Checkout() {
-  // Χρειαζόμαστε μόνο το state για τη θυρίδα του BoxNow
+const stripePromise = loadStripe('pk_test_51TOQ4XIeXTRO576mOVDZujPkepiG71IihruMKXAUGHw4QgOINWIMMFJmfewClPQzRYiwdRvTiio5qfgr7L5QpNZS00XvdDD41X');
+
+const PaymentForm = ({ finalTotal, emptyCart , cart }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const navigate = useNavigate();
+  const [error, setError] = useState(null);
+  const [processing, setProcessing] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); 
+    if (!stripe || !elements) return; 
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const res = await fetch('http://localhost:5001/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: Math.round(finalTotal * 100) }) 
+      });
+      
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      const clientSecret = data.clientSecret;
+
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: elements.getElement(CardElement),
+          billing_details: {
+            name: 'Πελάτης VD Nails', 
+          },
+        }
+      });
+
+      if (result.error) {
+        setError(result.error.message);
+      } else {
+        if (result.paymentIntent.status === 'succeeded') {
+          const hasAppointment = cart.some(item => item.isAppointment);
+          emptyCart();
+          navigate('/success', { state: { isAppointment: hasAppointment } });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Υπήρξε κάποιο πρόβλημα με τη σύνδεση.');
+    }
+    
+    setProcessing(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="mock-stripe-container">
+        <div className="form-group">
+          <label>Στοιχεία Κάρτας</label>
+          <div className="card-inputs-wrapper" style={{ padding: '15px', width: '100%', backgroundColor: '#ffffff', minHeight: '50px' }}>
+            <CardElement options={{ style: { base: { fontSize: '16px', color: '#3b2b1f' } } }} />
+          </div>
+        </div>
+      </div>
+
+      {error && <div style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.9rem' }}>{error}</div>}
+
+      <div className="terms-checkbox">
+        <label>
+          <input type="checkbox" required />
+          <span>Έχω διαβάσει και συμφωνώ με τους <a href="#">Όρους Χρήσης</a> και την <a href="#">Πολιτική Απορρήτου</a>. *</span>
+        </label>
+      </div>
+
+      <button type="submit" disabled={!stripe || processing} className="pay-now-btn">
+        {processing ? 'Επεξεργασία Πληρωμής...' : `Ολοκλήρωση & Πληρωμή ${finalTotal.toFixed(2)}€`}
+      </button>
+    </form>
+  );
+};
+
+export default function Checkout({ cart, setCart }) {
   const [boxNowLocker, setBoxNowLocker] = useState(null);
 
-  // Εικονικά δεδομένα καλαθιού
-  const cartSubtotal = 26.50;
-  
-  // Το κόστος είναι σταθερό αφού έχουμε μόνο BoxNow
-  const shippingCost = 2.00;
+  const hasAppointment = cart.some(item => item.isAppointment);
+  // Υπολογισμοί με βάση το cart που έρχεται ως prop
+  const cartSubtotal = cart ? cart.reduce((total, item) => total + (item.price * item.qty), 0) : 0;
+  const shippingCost = (hasAppointment || cart.length === 0) ? 0 : 2.00;
   const finalTotal = cartSubtotal + shippingCost;
 
-  // Εικονική λειτουργία ανοίγματος χάρτη BoxNow
+  // Η συνάρτηση που αδειάζει το καλάθι χρησιμοποιώντας το setCart του App.jsx
+  const emptyCart = () => setCart([]);
+
   const handleBoxNowClick = () => {
-    // Εδώ στο μέλλον θα ανοίγει το αληθινό widget της BoxNow. 
     setBoxNowLocker("Locker #1245 - BP Λεωφ. Κηφισίας 15");
   };
 
   return (
     <div className="checkout-wrapper">
-      
       <div className="checkout-header">
         <h1>Ταμείο.</h1>
         <p>Ολοκλήρωση της παραγγελίας σας με ασφάλεια.</p>
       </div>
 
       <div className="checkout-container">
-        
-        {/* Αριστερή Στήλη: Φόρμα */}
         <div className="payment-section">
           
-          {/* 1. Στοιχεία Επικοινωνίας */}
           <div className="checkout-block">
             <h3>1. Στοιχεία Επικοινωνίας</h3>
             <div className="form-group">
@@ -51,117 +129,64 @@ function Checkout() {
             </div>
           </div>
 
-          {/* 2. Αποστολή (Μόνο BoxNow) */}
+        {!hasAppointment ? (
           <div className="checkout-block">
             <h3>2. Αποστολή (Αποκλειστικά μέσω BoxNow)</h3>
-            
             <div className="boxnow-fields">
               <p className="boxnow-instructions">
-                Η αποστολή των προϊόντων μας γίνεται <strong>αποκλειστικά μέσω BoxNow</strong> για να παραλαμβάνετε γρήγορα, 24/7, τη στιγμή που σας εξυπηρετεί! Επιλέξτε την κοντινότερη θυρίδα στον χάρτη.
+                Επιλέξτε την κοντινότερη θυρίδα στον χάρτη.
               </p>
-              
               <button type="button" className="boxnow-map-btn" onClick={handleBoxNowClick}>
                 🗺️ Επιλογή Θυρίδας στον Χάρτη
               </button>
-              
               {boxNowLocker && (
                 <div className="boxnow-selected-locker">
                   ✅ Επιλέξατε: <strong>{boxNowLocker}</strong>
                 </div>
               )}
             </div>
-
-            {/* Μετέφερα εδώ τα σχόλια, κάτω από την επιλογή θυρίδας */}
-            <div className="form-group" style={{ marginTop: '20px' }}>
-              <label>Σχόλια Παραγγελίας (Προαιρετικό)</label>
-              <textarea placeholder="Αφήστε μας ένα μήνυμα αν χρειάζεται..." rows="3"></textarea>
-            </div>
           </div>
+          ): (
+            <div className="checkout-block appointment-info-box">
+              <h3>2. Πληροφορίες Κράτησης</h3>
+              <p>Η πληρωμή αφορά την επιβεβαίωση του ραντεβού σας.</p>
+            </div>
+          )}
 
-          {/* 3. Πληρωμή */}
           <div className="checkout-block">
             <h3>3. Πληρωμή</h3>
             <p className="stripe-info">Ασφαλής συναλλαγή κρυπτογραφημένη μέσω <strong>Stripe</strong></p>
             
-            <div className="mock-stripe-container">
-              <div className="form-group">
-                <label>Στοιχεία Κάρτας</label>
-                <div className="card-inputs-wrapper">
-                  <input type="text" className="card-number" placeholder="0000 0000 0000 0000" maxLength="19" />
-                  <input type="text" className="card-expiry" placeholder="MM/YY" maxLength="5" />
-                  <input type="text" className="card-cvc" placeholder="CVC" maxLength="3" />
-                </div>
-              </div>
-            </div>
+            <Elements stripe={stripePromise}>
+              {/* Περνάμε το emptyCart ως prop στο PaymentForm */}
+              <PaymentForm finalTotal={finalTotal} emptyCart={emptyCart} cart={cart}/>
+            </Elements>
 
-            <div className="terms-checkbox">
-              <label>
-                <input type="checkbox" required />
-                <span>Έχω διαβάσει και συμφωνώ με τους <Link to="/terms" target="_blank">Όρους Χρήσης</Link> και την <Link to="/privacy" target="_blank">Πολιτική Απορρήτου</Link>. *</span>
-              </label>
-            </div>
-
-            <button type="button" className="pay-now-btn">
-              Ολοκλήρωση & Πληρωμή {finalTotal.toFixed(2)}€
-            </button>
           </div>
-
         </div>
 
-        {/* Δεξιά Στήλη: Σύνοψη */}
-        <div className="summary-section">
+       <div className="summary-section">
           <h3>Σύνοψη Παραγγελίας</h3>
-          
           <div className="summary-items-list">
-            <div className="summary-item">
-              <div className="sum-item-info">
-                <span className="sum-qty">1 x</span>
-                <span className="sum-name">Almond Cuticle Oil</span>
+            {cart && cart.map(item => (
+              <div key={item.id} className="summary-item">
+                <div className="sum-item-info">
+                  <span className="sum-qty">{item.qty} x</span>
+                  <span className="sum-name">{item.name}</span>
+                </div>
+                <span className="sum-price">{(item.price * item.qty).toFixed(2)}€</span>
               </div>
-              <span className="sum-price">8.50€</span>
-            </div>
-            
-            <div className="summary-item">
-              <div className="sum-item-info">
-                <span className="sum-qty">1 x</span>
-                <span className="sum-name">Luxury Hand Cream</span>
-              </div>
-              <span className="sum-price">18.00€</span>
-            </div>
+            ))}
           </div>
-
           <div className="summary-divider"></div>
-          
           <div className="summary-costs">
-            <div className="cost-row">
-              <span>Αξία Προϊόντων</span>
-              <span>{cartSubtotal.toFixed(2)}€</span>
-            </div>
-            <div className="cost-row">
-              <span>Μεταφορικά (BoxNow)</span>
-              <span>{shippingCost.toFixed(2)}€</span>
-            </div>
+            <div className="cost-row"><span>Αξία Προϊόντων</span><span>{cartSubtotal.toFixed(2)}€</span></div>
+            <div className="cost-row"><span>Μεταφορικά</span><span>{shippingCost.toFixed(2)}€</span></div>
           </div>
-
           <div className="summary-divider"></div>
-          
-          <div className="summary-total">
-            <span>Τελικό Σύνολο</span>
-            <span>{finalTotal.toFixed(2)}€</span>
-          </div>
-
-          <div className="secure-badge">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            256-bit SSL Encryption
-          </div>
+          <div className="summary-total"><span>Τελικό Σύνολο</span><span>{finalTotal.toFixed(2)}€</span></div>
         </div>
-
       </div>
     </div>
   );
 }
-
-export default Checkout;

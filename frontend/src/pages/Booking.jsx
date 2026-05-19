@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import '../index.css'; 
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Χρησιμοποιούμε navigate αντί για Link
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import el from 'date-fns/locale/el'; 
 registerLocale('el', el);
 
-export default function Booking() {
+// Προσθέτουμε το setCart στα props
+export default function Booking({ setCart }) {
+  const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -18,30 +21,34 @@ export default function Booking() {
 
   const [errors, setErrors] = useState({});
 
+  // Τιμοκατάλογος για να ξέρει το Checkout τι να χρεώσει στην "Προπληρωμή"
+  const servicePrices = {
+    manicure: 20.00,
+    pedicure: 25.00,
+    face: 40.00,
+    other: 30.00
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const validateForm = () => {
     const newErrors = {};
-
     const nameParts = formData.name.trim().split(/\s+/);
     if (nameParts.length < 2) {
       newErrors.name = 'Παρακαλώ συμπληρώστε το ονοματεπώνυμο.';
     }
-
     const phoneRegex = /^\d{10}$/;
     if (!phoneRegex.test(formData.phone)) {
       newErrors.phone = 'Παρακαλώ συμπληρώστε τον 10-ψήφιο αριθμό τηλεφώνου.';
     }
-
     if (!formData.date) {
       newErrors.date = 'Παρακαλώ επιλέξτε ημερομηνία.';
     }
     if (!formData.time) {
       newErrors.time = 'Παρακαλώ επιλέξτε ώρα.';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -49,8 +56,31 @@ export default function Booking() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log("Το ραντεβού που ζητήθηκε:", formData);
-      alert(`Τέλεια, ${formData.name}! Το αίτημά σου καταγράφηκε.`);
+      // Υπολογισμός τιμής βάσει επιλογής πληρωμής
+      const isPrepay = formData.payment === 'prepay';
+      const finalPrice = isPrepay ? servicePrices[formData.service] : 5.00;
+      
+      // Δημιουργία του αντικειμένου ραντεβού για το καλάθι
+      const appointmentItem = {
+        id: `apt-${Date.now()}`,
+        name: `Ραντεβού: ${formData.service}`,
+        price: finalPrice,
+        qty: 1,
+        isAppointment: true,
+        paymentType: isPrepay ? 'Εξόφληση' : 'Προκαταβολή',
+        details: {
+          clientName: formData.name,
+          clientPhone: formData.phone,
+          date: formData.date.toLocaleDateString('el-GR'),
+          time: formData.time.toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })
+        }
+      };
+
+      // Ενημέρωση του κεντρικού καλαθιού στο App.jsx
+      setCart([appointmentItem]);
+
+      // Ανακατεύθυνση στο Checkout
+      navigate('/checkout');
     }
   };
 
@@ -94,11 +124,11 @@ export default function Booking() {
             <div className="radio-group">
               <label className="radio-label">
                 <input type="radio" name="payment" value="prepay" checked={formData.payment === 'prepay'} onChange={handleChange} required />
-                Προπληρωμή
+                Προπληρωμή (Εξόφληση)
               </label>
               <label className="radio-label">
                 <input type="radio" name="payment" value="store" checked={formData.payment === 'store'} onChange={handleChange} required />
-                Πληρωμή στο Κατάστημα (Προκαταβολή 5€)
+                Πληρωμή στο Κατάστημα (Προκαταβολή 5€ online)
               </label>
             </div>
           </div>
@@ -139,11 +169,9 @@ export default function Booking() {
             </div>
           </div>
 
-          <Link to="/checkout">
-            <button type="submit" className="icon-link">
-                Επιβεβαίωση Κράτησης
-              </button>
-          </Link>
+          <button type="submit" className="icon-link">
+            Επιβεβαίωση Κράτησης & Πληρωμή
+          </button>
         </form>
       </div>
     </div>

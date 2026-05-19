@@ -9,8 +9,7 @@ const products = [
   { id: 4, name: "Luxury Hand Cream", price: 18.00, category: "Φροντίδα", image: "https://images.unsplash.com/photo-1611078489935-0cb964de46d6?auto=format&fit=crop&w=500&q=80" }
 ];
 
-function Shop() {
-  const [cart, setCart] = useState([]);
+function Shop({ cart, setCart }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   const addToCart = (product) => {
@@ -97,7 +96,7 @@ function Shop() {
               <span>Σύνολο:</span>
               <span>{cartTotal.toFixed(2)}€</span>
             </div>
-            <Link to="/checkout">
+            <Link to="/checkout" >
               <button className="checkout-btn">Ταμείο</button>
             </Link>
           </div>
