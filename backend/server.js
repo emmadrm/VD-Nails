@@ -29,7 +29,12 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-app.use(cors({ origin: ['http://localhost:5173', 'https://vdnails.gr'], credentials: true }));
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
 app.use('/api/', apiLimiter);
