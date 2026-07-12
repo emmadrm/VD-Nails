@@ -18,7 +18,6 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { er
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Πολλά αιτήματα από αυτή την IP." } });
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const multer = require('multer');
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
