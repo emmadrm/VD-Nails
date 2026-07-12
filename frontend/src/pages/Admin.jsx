@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import '../index.css'; 
 
 export default function Admin() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
+  // State για το Καθολικό Modal Επιβεβαίωσης
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   // Tabs
   const [activeTab, setActiveTab] = useState('appointments');
@@ -13,13 +18,14 @@ export default function Admin() {
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
 
-  // Φίλτρα για τα ραντεβού
+  // Φίλτρα
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
 
   // Φόρμες Διαχείρισης
+  // ΠΡΟΣΟΧΗ: Το image_url έγινε imageFile για υποστήριξη ανεβάσματος αρχείου
   const [productForm, setProductForm] = useState({
-    id: null, name: '', description: '', price: '', image_url: '', stock: 10
+    id: null, name: '', description: '', price: '', imageFile: null, stock: 10
   });
 
   const [serviceForm, setServiceForm] = useState({
@@ -29,13 +35,10 @@ export default function Admin() {
   const [editingApt, setEditingApt] = useState(null);
 
   const [blockForm, setBlockForm] = useState({
-    date: '',
-    time: '09:00',
-    duration: 60,
-    reason: 'Ρεπό / Προσωπικός Χρόνος'
+    date: '', time: '09:00', duration: 60, reason: 'Ρεπό / Προσωπικός Χρόνος'
   });
 
-  // --- BI STATS STATES ---
+  // BI STATS
   const [statsRange, setStatsRange] = useState('1m'); 
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -44,250 +47,261 @@ export default function Admin() {
   const [loadingStats, setLoadingStats] = useState(false);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('adminToken');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
+    return { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` };
+  };
+
+  const getJsonHeaders = () => {
+    return { 'Content-Type': 'application/json', ...getAuthHeaders() };
   };
 
   const handleAuthError = (status) => {
     if (status === 401 || status === 403) {
       localStorage.removeItem('adminToken');
-      navigate('/vd-admin-12xE5'); 
+      navigate('/notfound'); 
     }
   };
 
+  // --- HELPER ΓΙΑ MODAL ΕΠΙΒΕΒΑΙΩΣΗΣ ---
+  const triggerConfirm = (title, message, actionCallback) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: async () => {
+        await actionCallback();
+        setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null });
+      }
+    });
+  };
+
   useEffect(() => {
-    if (!localStorage.getItem('adminToken')) {
-      navigate('/notfound');
-      return;
-    }
-    fetchAppointments();
-    fetchOrders();
-    fetchProducts();
-    fetchServices();
+    if (!localStorage.getItem('adminToken')) { navigate('/notfound'); return; }
+    fetchAppointments(); fetchOrders(); fetchProducts(); fetchServices();
   }, [navigate]);
 
-  // --- ΣΤΑΤΙΣΤΙΚΑ (BI) EFFECT & FETCH ---
   useEffect(() => {
     if (activeTab !== 'stats') return;
     calculateDatesAndFetch();
   }, [activeTab, statsRange, customStartDate, customEndDate]);
 
   const calculateDatesAndFetch = () => {
-    let start = new Date();
-    let end = new Date();
-
+    let start = new Date(); let end = new Date();
     if (statsRange === '1m') start.setMonth(start.getMonth() - 1);
     else if (statsRange === '3m') start.setMonth(start.getMonth() - 3);
     else if (statsRange === '6m') start.setMonth(start.getMonth() - 6);
     else if (statsRange === '1y') start.setFullYear(start.getFullYear() - 1);
     else if (statsRange === 'custom') {
       if (!customStartDate || !customEndDate) return;
-      fetchData(customStartDate, customEndDate);
-      return;
+      fetchData(customStartDate, customEndDate); return;
     }
-
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
-    fetchData(startStr, endStr);
+    fetchData(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
   };
 
   const fetchData = async (start, end) => {
     setLoadingStats(true);
     try {
       const [salesRes, aptRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/stats/sales?startDate=${start}&endDate=${end}`, { headers: getAuthHeaders() }),
-        fetch(`${API_URL}/api/admin/stats/appointments?startDate=${start}&endDate=${end}`, { headers: getAuthHeaders() })
+        fetch(`${API_URL}/api/admin/stats/sales?startDate=${start}&endDate=${end}`, { headers: getJsonHeaders() }),
+        fetch(`${API_URL}/api/admin/stats/appointments?startDate=${start}&endDate=${end}`, { headers: getJsonHeaders() })
       ]);
-
       if (salesRes.ok && aptRes.ok) {
         setSalesStats(await salesRes.json());
         setAppointmentStats(await aptRes.json());
       }
-    } catch (err) {
-      console.error("Σφάλμα BI φόρτωσης:", err);
-    } finally {
-      setLoadingStats(false);
-    }
+    } catch (err) { toast.error("Σφάλμα φόρτωσης στατιστικών."); } 
+    finally { setLoadingStats(false); }
   };
 
-  // --- FETCH ΔΕΔΟΜΕΝΩΝ ---
   const fetchAppointments = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/appointments`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/appointments`, { headers: getJsonHeaders() });
       if (!res.ok) return handleAuthError(res.status);
-      const data = await res.json();
-      setAppointments(data);
-    } catch (err) { console.error(err); }
+      setAppointments(await res.json());
+    } catch (err) { toast.error("Σφάλμα φόρτωσης ραντεβού."); }
   };
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_URL}/api/admin/orders`, { headers: getJsonHeaders() });
       if (!res.ok) return handleAuthError(res.status);
-      const data = await res.json();
-      setOrders(data);
-    } catch (err) { console.error(err); }
+      setOrders(await res.json());
+    } catch (err) { toast.error("Σφάλμα φόρτωσης παραγγελιών."); }
   };
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/products`, { headers: getAuthHeaders() });
-      const data = await res.json();
-      setProducts(data);
-    } catch (err) { console.error(err); }
+      const res = await fetch(`${API_URL}/api/products`, { headers: getJsonHeaders() });
+      setProducts(await res.json());
+    } catch (err) { toast.error("Σφάλμα φόρτωσης προϊόντων."); }
   };
 
   const fetchServices = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/services`, { headers: getAuthHeaders() });
-      const data = await res.json();
-      setServices(data);
-    } catch (err) { console.error(err); }
+      const res = await fetch(`${API_URL}/api/services`, { headers: getJsonHeaders() });
+      setServices(await res.json());
+    } catch (err) { toast.error("Σφάλμα φόρτωσης υπηρεσιών."); }
   };
 
-  // --- ΔΙΑΧΕΙΡΙΣΗ ΠΡΟΪΟΝΤΩΝ ---
-  const handleSaveProduct = async (e) => {
+  // --- ΔΙΑΧΕΙΡΙΣΗ ΠΡΟΪΟΝΤΩΝ (FILE UPLOAD) ---
+  const handleSaveProduct = (e) => {
     e.preventDefault();
-    const isEdit = !!productForm.id;
-    const url = isEdit ? `${API_URL}/api/products/${productForm.id}` : `${API_URL}/api/products`;
-    try {
-      const res = await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(productForm)
-      });
-      if (!res.ok) return handleAuthError(res.status);
-      setProductForm({ id: null, name: '', description: '', price: '', image_url: '', stock: 10 });
-      fetchProducts();
-    } catch (err) { console.error(err); }
+    triggerConfirm("Αποθήκευση Προϊόντος", "Είστε σίγουροι για την προσθήκη/ενημέρωση αυτού του προϊόντος στο E-shop;", async () => {
+      const isEdit = !!productForm.id;
+      const url = isEdit ? `${API_URL}/api/products/${productForm.id}` : `${API_URL}/api/products`;
+      
+      const formData = new FormData();
+      formData.append('name', productForm.name);
+      formData.append('description', productForm.description);
+      formData.append('price', productForm.price);
+      formData.append('stock', productForm.stock);
+      if (productForm.imageFile) formData.append('image', productForm.imageFile);
+
+      try {
+        const res = await fetch(url, {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: getAuthHeaders(), // Προσοχή: ΟΧΙ 'Content-Type': 'application/json' όταν στέλνουμε FormData
+          body: formData
+        });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success(" Το προϊόν αποθηκεύτηκε επιτυχώς!");
+        setProductForm({ id: null, name: '', description: '', price: '', imageFile: null, stock: 10 });
+        fetchProducts();
+      } catch (err) { toast.error(" Αποτυχία αποθήκευσης προϊόντος."); }
+    });
   };
 
-  const handleDeleteProduct = async (id) => {
-    if (window.confirm("🚨 Διαγραφή προϊόντος;")) {
+  const handleDeleteProduct = (id) => {
+    triggerConfirm("Διαγραφή Προϊόντος", "Η διαγραφή του προϊόντος είναι οριστική. Να προχωρήσω;", async () => {
       try {
-        const res = await fetch(`${API_URL}/api/products/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-        if (!res.ok) return handleAuthError(res.status);
+        const res = await fetch(`${API_URL}/api/products/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success("🗑️ Το προϊόν διεγράφη.");
         fetchProducts();
-      } catch (err) { console.error(err); }
-    }
+      } catch (err) { toast.error("Σφάλμα διαγραφής."); }
+    });
   };
 
   // --- ΔΙΑΧΕΙΡΙΣΗ ΥΠΗΡΕΣΙΩΝ ---
-  const handleSaveService = async (e) => {
+  const handleSaveService = (e) => {
     e.preventDefault();
-    const isEdit = !!serviceForm.id;
-    const url = isEdit ? `${API_URL}/api/services/${serviceForm.id}` : `${API_URL}/api/services`;
-    try {
-      const res = await fetch(url, {
-        method: isEdit ? 'PUT' : 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(serviceForm)
-      });
-      if (!res.ok) return handleAuthError(res.status);
-      setServiceForm({ id: null, category: 'Χέρια', name: '', description: '', price: '', duration_minutes: 60 });
-      fetchServices();
-    } catch (err) { console.error(err); }
+    triggerConfirm("Αποθήκευση Υπηρεσίας", "Επιβεβαίωση αλλαγών στις υπηρεσίες;", async () => {
+      const isEdit = !!serviceForm.id;
+      const url = isEdit ? `${API_URL}/api/services/${serviceForm.id}` : `${API_URL}/api/services`;
+      try {
+        const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: getJsonHeaders(), body: JSON.stringify(serviceForm) });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success("Η υπηρεσία αποθηκεύτηκε.");
+        setServiceForm({ id: null, category: 'Χέρια', name: '', description: '', price: '', duration_minutes: 60 });
+        fetchServices();
+      } catch (err) { toast.error("Σφάλμα αποθήκευσης."); }
+    });
   };
 
-  const handleDeleteService = async (id) => {
-    if (window.confirm("🚨 Διαγραφή υπηρεσίας;")) {
+  const handleDeleteService = (id) => {
+    triggerConfirm("Διαγραφή Υπηρεσίας", "Προσοχή: Αυτό μπορεί να επηρεάσει προηγούμενα στατιστικά. Διαγραφή;", async () => {
       try {
-        const res = await fetch(`${API_URL}/api/services/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-        if (!res.ok) return handleAuthError(res.status);
+        const res = await fetch(`${API_URL}/api/services/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success("🗑️ Η υπηρεσία διεγράφη.");
         fetchServices();
-      } catch (err) { console.error(err); }
-    }
+      } catch (err) { toast.error("Σφάλμα διαγραφής."); }
+    });
   };
 
   // --- ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ ---
-  const handleUpdateAppointment = async (e) => {
+  const handleUpdateAppointment = (e) => {
     e.preventDefault();
-    try {
-      const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          client_name: editingApt.client_name,
-          client_phone: editingApt.client_phone,
-          client_email: editingApt.client_email,
-          appointment_date: editingApt.appointment_date.slice(0, 10),
-          appointment_time: editingApt.appointment_time.slice(0, 5),
-          service_name: editingApt.service_name
-        })
-      });
-      if (!res.ok) return handleAuthError(res.status);
-      toast.success("✅ Το ραντεβού ενημερώθηκε επιτυχώς!");
-      setEditingApt(null);
-      fetchAppointments();
-    } catch (err) { console.error(err); }
+    triggerConfirm("Ενημέρωση Κράτησης", "Είστε σίγουροι για την τροποποίηση αυτού του ραντεβού;", async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}`, {
+          method: 'PUT',
+          headers: getJsonHeaders(),
+          body: JSON.stringify({
+            client_name: editingApt.client_name, client_phone: editingApt.client_phone,
+            client_email: editingApt.client_email, appointment_date: editingApt.appointment_date.slice(0, 10),
+            appointment_time: editingApt.appointment_time.slice(0, 5), service_name: editingApt.service_name
+          })
+        });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success(" Το ραντεβού ενημερώθηκε!");
+        setEditingApt(null);
+        fetchAppointments();
+      } catch (err) { toast.error("Σφάλμα ενημέρωσης ραντεβού."); }
+    });
   };
 
-  const handleDeleteAppointment = async (id) => {
-    if (window.confirm("🚨 Ακύρωση/Διαγραφή αυτού του ραντεβού;")) {
+  const handleDeleteAppointment = (id) => {
+    triggerConfirm("Ακύρωση Κράτησης", "Είστε σίγουροι ότι θέλετε να ακυρώσετε και να διαγράψετε αυτό το ραντεβού;", async () => {
       try {
-        const res = await fetch(`${API_URL}/api/appointments/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-        if (!res.ok) return handleAuthError(res.status);
+        const res = await fetch(`${API_URL}/api/appointments/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
+        if (!res.ok) throw new Error("Σφάλμα");
+        toast.success(" Το ραντεβού ακυρώθηκε.");
         fetchAppointments();
-      } catch (err) { console.error(err); }
-    }
+      } catch (err) { toast.error("Σφάλμα κατά την ακύρωση."); }
+    });
   };
 
   // --- ΜΠΛΟΚΑΡΙΣΜΑ ΩΡΩΝ / ΡΕΠΟ ---
-  const handleBlockTime = async (e) => {
+  const handleBlockTime = (e) => {
     e.preventDefault();
     if (!blockForm.date) return toast.error("Επιλέξτε ημερομηνία.");
 
-    const payload = {
-      client_name: "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ",
-      client_email: "admin@vdnails.com",
-      client_phone: "0000000000",
-      service_name: blockForm.reason, 
-      appointment_date: blockForm.date,
-      appointment_time: blockForm.time,
-      payment_method: "store",
-      total_amount: 0,
-      duration: parseInt(blockForm.duration) 
-    };
+    triggerConfirm("Κλείδωμα Ημερολογίου", `Θα κλειδώσετε την ημέρα ${blockForm.date} στις ${blockForm.time} για ${blockForm.duration} λεπτά. Να προχωρήσω;`, async () => {
+      const payload = {
+        client_name: "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ",
+        client_email: "admin@vdnails.com",
+        client_phone: "0000000000",
+        service_name: blockForm.reason, 
+        appointment_date: blockForm.date,
+        appointment_time: blockForm.time,
+        payment_method: "store",
+        payment_status: "completed",
+        status: "confirmed", // CRITICAL: Για να μετράει ως 'πιασμένο' ραντεβού
+        total_amount: 0,
+        duration: parseInt(blockForm.duration) 
+      };
 
-    try {
-      const res = await fetch(`${API_URL}/api/appointments/direct`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        toast.success("🔒 Η ώρα/μέρα κλειδώθηκε! Δεν είναι πλέον διαθέσιμη για τους πελάτες.");
-        fetchAppointments();
-        setActiveTab('appointments');
-      } else {
-        toast.error("Κάτι πήγε λάθος.");
-      }
-    } catch (err) { console.error(err); }
+      try {
+        const res = await fetch(`${API_URL}/api/appointments/direct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          toast.success("🔒 Η ώρα/μέρα κλειδώθηκε επιτυχώς!");
+          fetchAppointments();
+          setActiveTab('appointments');
+        } else {
+          toast.error("Κάτι πήγε λάθος.");
+        }
+      } catch (err) { toast.error("Σφάλμα σύνδεσης με server."); }
+    });
+  };
+
+  // --- ΑΠΟΣΤΟΛΗ ΠΑΡΑΓΓΕΛΙΑΣ ---
+  const handleShipmentToggle = (id, status) => {
+    triggerConfirm("Ενημέρωση Αποστολής", `Επιβεβαιώνετε ότι η παραγγελία είναι πλέον ${status ? 'Απεσταλμένη' : 'Σε Εκκρεμότητα'};`, async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/admin/orders/update-shipment`, { 
+          method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ saleId: id, shipped: status })
+        });
+        if (res.ok) {
+          toast.success(`Η παραγγελία σημειώθηκε ως ${status ? 'Απεσταλμένη' : 'Εκκρεμής'}.`);
+          setOrders(orders.map(o => o.id === id ? { ...o, shipped: status } : o));
+        } else {
+          toast.error("Αποτυχία ενημέρωσης.");
+        }
+      } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
+    });
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    navigate('/');
-  };
-
-  const handleShipmentToggle = async (id, status) => {
-  try {
-    const res = await fetch(`${API_URL}/api/admin/orders/update-shipment`, { 
-      method: 'POST',
-      headers: getAuthHeaders(), 
-      body: JSON.stringify({ saleId: id, shipped: status })
+    triggerConfirm("Αποσύνδεση", "Είστε σίγουροι ότι θέλετε να αποσυνδεθείτε από το Admin Panel;", () => {
+      localStorage.removeItem('adminToken');
+      navigate('/');
     });
-    
-    if (res.ok) {
-      setOrders(orders.map(o => o.id === id ? { ...o, shipped: status } : o));
-    }
-  } catch (err) {
-    console.error("Σφάλμα:", err);
-  }
-};
+  };
 
   const filteredAppointments = appointments.filter(apt => {
     const matchesSearch = apt.client_name.toLowerCase().includes(searchTerm.toLowerCase()) || apt.service_name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -295,6 +309,36 @@ export default function Admin() {
     return matchesSearch && matchesDate;
   });
 
+  const updateAppointmentStatus = (id, status) => {
+  triggerConfirm("Ολοκλήρωση Ραντεβού", "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/appointments/${id}/status`, { 
+        method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+      });
+      if (res.ok) {
+        toast.success("Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!");
+        fetchAppointments();
+      }
+    } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
+  });
+};
+
+const handleOrderStatusChange = (id, status) => {
+  if (status === 'cancelled') {
+    return toast.error("Η ακύρωση μπορεί να γίνει μόνο από τον πελάτη ή μέσω διαγραφής.");
+  }
+  triggerConfirm("Αλλαγή Κατάστασης", `Θέλετε να αλλάξετε την κατάσταση της παραγγελίας; (Θα προστεθεί στα έσοδα αν επιλέξετε 'Παραλήφθηκε')`, async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/orders/${id}/status`, { 
+        method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+      });
+      if (res.ok) {
+        toast.success("Η κατάσταση της παραγγελίας ενημερώθηκε!");
+        fetchOrders();
+      }
+    } catch (err) { toast.error("Σφάλμα."); }
+  });
+};
 
   return (
     <div className="admin-wrapper" style={{ padding: '30px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
@@ -312,15 +356,14 @@ export default function Admin() {
       
       {/* TABS MENU */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap', background: '#fff', padding: '8px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-        <button onClick={() => { setActiveTab('appointments'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'appointments' ? '#3b2b1f' : 'transparent', color: activeTab === 'appointments' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>📅 Ραντεβού ({appointments.length})</button>
-        <button onClick={() => { setActiveTab('availability'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'availability' ? '#bc9c82' : 'transparent', color: activeTab === 'availability' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>🔒 Κλείδωμα Ωρών / Ρεπό</button>
-        <button onClick={() => { setActiveTab('orders'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'orders' ? '#3b2b1f' : 'transparent', color: activeTab === 'orders' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>📦 Παραγγελίες ({orders.length})</button>
-        <button onClick={() => { setActiveTab('products'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'products' ? '#3b2b1f' : 'transparent', color: activeTab === 'products' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>🛒 Προϊόντα E-shop</button>
-        <button onClick={() => { setActiveTab('services'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'services' ? '#3b2b1f' : 'transparent', color: activeTab === 'services' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>💅 Υπηρεσίες & Χρόνοι</button>
-        <button onClick={() => { setActiveTab('stats'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'stats' ? '#10b981' : 'transparent', color: activeTab === 'stats' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>📊 Στατιστικά (BI)</button>
+        <button onClick={() => { setActiveTab('appointments'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'appointments' ? '#3b2b1f' : 'transparent', color: activeTab === 'appointments' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📅 Ραντεβού ({appointments.length})</button>
+        <button onClick={() => { setActiveTab('availability'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'availability' ? '#bc9c82' : 'transparent', color: activeTab === 'availability' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🔒 Κλείδωμα Ωρών / Ρεπό</button>
+        <button onClick={() => { setActiveTab('orders'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'orders' ? '#3b2b1f' : 'transparent', color: activeTab === 'orders' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📦 Παραγγελίες ({orders.length})</button>
+        <button onClick={() => { setActiveTab('products'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'products' ? '#3b2b1f' : 'transparent', color: activeTab === 'products' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🛒 Προϊόντα E-shop</button>
+        <button onClick={() => { setActiveTab('services'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'services' ? '#3b2b1f' : 'transparent', color: activeTab === 'services' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>💅 Υπηρεσίες & Χρόνοι</button>
+        <button onClick={() => { setActiveTab('stats'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'stats' ? '#10b981' : 'transparent', color: activeTab === 'stats' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📊 Στατιστικά (BI)</button>
       </div>
 
-      {/* ------------------------------------ */}
       {/* TAB 1: ΡΑΝΤΕΒΟΥ */}
       {activeTab === 'appointments' && (
         <div style={{ display: 'grid', gridTemplateColumns: editingApt ? '2fr 1fr' : '1fr', gap: '25px' }}>
@@ -328,8 +371,8 @@ export default function Admin() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
               <h3 style={{ margin: 0, color: '#3b2b1f' }}>Πρόγραμμα & Κρατήσεις</h3>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="text" placeholder="🔍 Αναζήτηση πελάτη/υπηρεσίας..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem' }} />
-                <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', fontSize: '0.9rem' }} />
+                <input type="text" placeholder="🔍 Αναζήτηση πελάτη/υπηρεσίας..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da' }} />
+                <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da' }} />
                 {dateFilter && <button onClick={() => setDateFilter('')} style={{ background: '#e9ecef', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>✖</button>}
               </div>
             </div>
@@ -372,8 +415,11 @@ export default function Admin() {
                       </td>
                       <td style={{ padding: '15px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                          <button onClick={() => setEditingApt(apt)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}>✏️</button>
-                          <button onClick={() => handleDeleteAppointment(apt.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>🗑️</button>
+                          {apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                            <button onClick={() => updateAppointmentStatus(apt.id, 'completed')} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }} title="Σήμανση ως Ολοκληρωμένο">✅</button>
+                          )}
+                          <button onClick={() => setEditingApt(apt)} style={{ background: '#ffc107', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}>✏️</button>
+                          <button onClick={() => handleDeleteAppointment(apt.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
                         </div>
                       </td>
                     </tr>
@@ -384,87 +430,74 @@ export default function Admin() {
           </div>
 
           {editingApt && (
-            <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', borderTop: '4px solid #ffc107' }}>
-              <h4 style={{ margin: '0 0 20px 0', color: '#3b2b1f' }}>✏️ Επεξεργασία Κράτησης</h4>
-              <form onSubmit={handleUpdateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Όνομα Πελάτη</label>
-                  <input type="text" value={editingApt.client_name} onChange={e => setEditingApt({...editingApt, client_name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Τηλέφωνο</label>
-                  <input type="tel" value={editingApt.client_phone} onChange={e => setEditingApt({...editingApt, client_phone: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Υπηρεσία</label>
-                  <select value={editingApt.service_name} onChange={e => setEditingApt({...editingApt, service_name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}>
-                    {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <div style={{ width: '100%' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ημερομηνία</label>
-                    <input type="date" value={editingApt.appointment_date.slice(0,10)} onChange={e => setEditingApt({...editingApt, appointment_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-                  </div>
-                  <div style={{ width: '100%' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ώρα</label>
-                    <input type="time" value={editingApt.appointment_time.slice(0,5)} onChange={e => setEditingApt({...editingApt, appointment_time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                  <button type="submit" style={{ width: '100%', background: '#10b981', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Αποθήκευση</button>
-                  <button type="button" onClick={() => setEditingApt(null)} style={{ width: '100%', background: '#e5e7eb', color: '#495057', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Ακύρωση</button>
-                </div>
-              </form>
-            </div>
+             <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', borderTop: '4px solid #ffc107' }}>
+             <h4 style={{ margin: '0 0 20px 0', color: '#3b2b1f' }}>✏️ Επεξεργασία Κράτησης</h4>
+             <form onSubmit={handleUpdateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+               <div>
+                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Όνομα Πελάτη</label>
+                 <input type="text" value={editingApt.client_name} onChange={e => setEditingApt({...editingApt, client_name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
+               </div>
+               <div>
+                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Τηλέφωνο</label>
+                 <input type="tel" value={editingApt.client_phone} onChange={e => setEditingApt({...editingApt, client_phone: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
+               </div>
+               <div style={{ display: 'flex', gap: '10px' }}>
+                 <div style={{ width: '100%' }}>
+                   <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ημερομηνία</label>
+                   <input type="date" value={editingApt.appointment_date.slice(0,10)} onChange={e => setEditingApt({...editingApt, appointment_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
+                 </div>
+                 <div style={{ width: '100%' }}>
+                   <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ώρα</label>
+                   <input type="time" value={editingApt.appointment_time.slice(0,5)} onChange={e => setEditingApt({...editingApt, appointment_time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
+                 </div>
+               </div>
+               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                 <button type="submit" style={{ width: '100%', background: '#10b981', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Αποθήκευση</button>
+                 <button type="button" onClick={() => setEditingApt(null)} style={{ width: '100%', background: '#e5e7eb', color: '#495057', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Ακύρωση</button>
+               </div>
+             </form>
+           </div>
           )}
         </div>
       )}
 
-      {/* ------------------------------------ */}
-      {/* TAB 2: ΚΛΕΙΔΩΜΑ ΩΡΩΝ / ΡΕΠΟ */}
+      {/* TAB 2: ΚΛΕΙΔΩΜΑ ΩΡΩΝ */}
       {activeTab === 'availability' && (
         <div style={{ maxWidth: '600px', margin: '0 auto', background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderTop: '4px solid #bc9c82' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#3b2b1f' }}>🔒 Κλείδωμα Ημερολογίου (Ρεπό / Διαλείμματα)</h3>
-          <p style={{ color: '#6c757d', fontSize: '0.9rem', marginBottom: '25px' }}>Επίλεξε μέρα και ώρα που θέλεις να απενεργοποιήσεις. Οι ώρες αυτές θα αφαιρεθούν αυτόματα από τις επιλογές των πελατών σου.</p>
-          
-          <form onSubmit={handleBlockTime} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <div>
-              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ημερομηνία *</label>
-              <input type="date" required value={blockForm.date} onChange={e => setBlockForm({...blockForm, date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
+        <h3 style={{ margin: '0 0 10px 0', color: '#3b2b1f' }}>🔒 Κλείδωμα Ημερολογίου</h3>
+        <form onSubmit={handleBlockTime} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ημερομηνία *</label>
+            <input type="date" required value={blockForm.date} onChange={e => setBlockForm({...blockForm, date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <div style={{ width: '100%' }}>
+              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ώρα Έναρξης</label>
+              <input type="time" value={blockForm.time} onChange={e => setBlockForm({...blockForm, time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
             </div>
-            
-            <div style={{ display: 'flex', gap: '15px' }}>
-              <div style={{ width: '100%' }}>
-                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ώρα Έναρξης</label>
-                <input type="time" value={blockForm.time} onChange={e => setBlockForm({...blockForm, time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-              </div>
-              <div style={{ width: '100%' }}>
-                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Διάρκεια Κλειδώματος</label>
-                <select value={blockForm.duration} onChange={e => setBlockForm({...blockForm, duration: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}>
-                  <option value="30">30 λεπτά (Διάλειμμα)</option>
-                  <option value="60">1 ώρα</option>
-                  <option value="120">2 ώρες</option>
-                  <option value="240">4 ώρες (Μισή Μέρα)</option>
-                  <option value="720">12 ώρες (Όλη τη μέρα / Ρεπό)</option>
-                </select>
-              </div>
+            <div style={{ width: '100%' }}>
+              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Διάρκεια (Λεπτά)</label>
+              <input 
+                type="number" 
+                min="15" 
+                required 
+                placeholder="π.χ. 120"
+                value={blockForm.duration} 
+                onChange={e => setBlockForm({...blockForm, duration: e.target.value})} 
+                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} 
+              />
             </div>
-
-            <div>
-              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Αιτιολογία (Φαίνεται μόνο σε εσένα)</label>
-              <input type="text" value={blockForm.reason} onChange={e => setBlockForm({...blockForm, reason: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} placeholder="π.χ. Προσωπικό ραντεβού, Ρεπό, Σεμινάριο" />
-            </div>
-
-            <button type="submit" style={{ background: '#bc9c82', color: '#fff', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer', marginTop: '10px' }}>
-              🔒 Επιβεβαίωση & Αποκλεισμός Ώρας
-            </button>
-          </form>
-        </div>
+          </div>
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Αιτιολογία</label>
+            <input type="text" value={blockForm.reason} onChange={e => setBlockForm({...blockForm, reason: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
+          </div>
+          <button type="submit" style={{ background: '#bc9c82', color: '#fff', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔒 Κλείδωμα Ώρας</button>
+        </form>
+      </div>
       )}
 
-      {/* ------------------------------------ */}
-      {/* TAB 3: ΠΑΡΑΓΓΕΛΙΕΣ */}
+      {/* TAB 3: ΠΑΡΑΓΓΕΛΙΕΣ (ΜΕ ΕΛΕΓΧΟ STATUS) */}
       {activeTab === 'orders' && (
         <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
           <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Διαχείριση Παραγγελιών (E-shop)</h3>
@@ -474,66 +507,59 @@ export default function Admin() {
                 <th style={{ padding: '15px' }}>Πελάτης</th>
                 <th style={{ padding: '15px' }}>Προϊόντα</th>
                 <th style={{ padding: '15px' }}>Locker BoxNow</th>
-                <th style={{ padding: '15px' }}>Σχόλια Πελάτη</th> 
                 <th style={{ padding: '15px', textAlign: 'right' }}>Σύνολο</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>Κατάσταση Αποστολής</th>
+                <th style={{ padding: '15px', textAlign: 'center' }}>Κατάσταση</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => (
-                <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                  <td style={{ padding: '15px' }}>
-                    <strong>{order.client_name}</strong><br/>
-                    <small style={{ color: '#6c757d' }}>📱 {order.client_phone}</small><br/>
-                    <small style={{ color: '#6c757d' }}>✉️ {order.client_email}</small>
-                  </td>
-                  <td style={{ padding: '15px' }}>
-                    {order.products?.map((p, idx) => (
-                      <div key={idx} style={{ fontSize: '0.9rem', marginBottom: '3px' }}>
-                        📦 <span style={{ fontWeight: 'bold' }}>{p.qty}x</span> - {p.name}
-                      </div>
-                    ))}
-                  </td>
-                  <td style={{ padding: '15px', fontSize: '0.85rem', color: '#0056b3', fontWeight: '500' }}>{order.boxnow_locker}</td>
-                  <td style={{ padding: '15px', fontSize: '0.85rem', fontStyle: 'italic', color: '#6c757d' }}>{order.customer_notes || '-'}</td>
-                  <td style={{ padding: '15px', textAlign: 'right' }}><strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{Number(order.total_amount).toFixed(2)}€</strong></td>
-                  <td style={{ padding: '15px', textAlign: 'right' }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation(); // Σταματάει οποιοδήποτε conflict με το table row
-                      handleShipmentToggle(order.id, !order.shipped);
-                    }}
-                    style={{ 
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '6px 14px',
-                      borderRadius: '20px',
-                      fontSize: '0.85rem',
-                      fontWeight: '700',
-                      border: 'none',
-                      transition: 'all 0.2s ease',
-                      backgroundColor: order.shipped ? '#d1e7dd' : '#fff3cd',
-                      color: order.shipped ? '#0f5132' : '#856404',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                    }}
-                  >
-                    {order.shipped ? '✅ Στάλθηκε' : '📦 Εκκρεμεί'}
-                  </button>
-                  </td>
-                </tr>
-              ))}
+              {orders.map(order => {
+                const isCancelled = order.status === 'cancelled';
+                return (
+                  <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6', background: isCancelled ? '#f8d7da' : 'transparent' }}>
+                    <td style={{ padding: '15px' }}>
+                      <strong>{order.client_name}</strong><br/>
+                      <small style={{ color: '#6c757d' }}>📱 {order.client_phone}</small>
+                    </td>
+                    <td style={{ padding: '15px' }}>
+                      {order.products?.map((p, idx) => (
+                        <div key={idx} style={{ fontSize: '0.9rem', marginBottom: '3px' }}>
+                          📦 <strong>{p.qty}x</strong> - {p.name}
+                        </div>
+                      ))}
+                    </td>
+                    <td style={{ padding: '15px', fontSize: '0.85rem', color: '#0056b3' }}>{order.boxnow_locker}</td>
+                    <td style={{ padding: '15px', textAlign: 'right' }}><strong style={{ color: '#10b981' }}>{Number(order.total_amount).toFixed(2)}€</strong></td>
+                    <td style={{ padding: '15px', textAlign: 'center' }}>
+                      {isCancelled ? (
+                        <span style={{ color: '#721c24', fontWeight: 'bold', background: '#f5c6cb', padding: '6px 12px', borderRadius: '20px', fontSize: '0.85rem' }}>🚫 Ακυρώθηκε</span>
+                      ) : (
+                        <select 
+                          value={order.status} 
+                          onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
+                          style={{ 
+                            padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', border: 'none', cursor: 'pointer',
+                            backgroundColor: order.status === 'completed' ? '#d1e7dd' : order.status === 'shipped' ? '#cff4fc' : order.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
+                            color: order.status === 'completed' ? '#0f5132' : order.status === 'shipped' ? '#055160' : order.status === 'cancelled' ? '#842029' : '#856404'
+                          }}
+                        >
+                          <option value="pending">📦 Εκκρεμεί</option>
+                          <option value="shipped">🚚 Στάλθηκε</option>
+                          <option value="completed">✅ Παραλήφθηκε</option>
+                          <option value="cancelled">🚫 Ακυρώθηκε</option>
+                        </select>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* ------------------------------------ */}
-      {/* TAB 4: ΔΙΑΧΕΙΡΙΣΗ ΠΡΟΪΟΝΤΩΝ */}
+      {/* TAB 4: ΠΡΟΪΟΝΤΑ (FILE UPLOAD) */}
       {activeTab === 'products' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
-          
           <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: 'fit-content' }}>
             <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>{productForm.id ? '✏️ Επεξεργασία' : '🛍️ Νέο Προϊόν'}</h3>
             <form onSubmit={handleSaveProduct} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -543,9 +569,21 @@ export default function Admin() {
                 <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Τιμή (€)</label><input type="number" step="0.01" required value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
                 <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Απόθεμα</label><input type="number" required value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
               </div>
-              <input type="url" placeholder="URL Φωτογραφίας" required value={productForm.image_url} onChange={e => setProductForm({...productForm, image_url: e.target.value})} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/>
-              <button type="submit" style={{ background: '#3b2b1f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>{productForm.id ? 'Αποθήκευση' : 'Προσθήκη στο E-shop'}</button>
-              {productForm.id && <button type="button" onClick={() => setProductForm({ id: null, name: '', description: '', price: '', image_url: '', stock: 10 })} style={{ padding: '10px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Ακύρωση</button>}
+              
+              {/* ΑΛΛΑΓΗ ΣΕ FILE UPLOAD */}
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Φωτογραφία Προϊόντος</label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={e => setProductForm({...productForm, imageFile: e.target.files[0]})} 
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '6px' }}
+                />
+                {!productForm.imageFile && !productForm.id && <small style={{ color: '#dc3545' }}>*Απαιτείται επιλογή αρχείου.</small>}
+              </div>
+
+              <button type="submit" style={{ background: '#3b2b1f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>{productForm.id ? 'Αποθήκευση' : 'Προσθήκη'}</button>
+              {productForm.id && <button type="button" onClick={() => setProductForm({ id: null, name: '', description: '', price: '', imageFile: null, stock: 10 })} style={{ padding: '10px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Ακύρωση</button>}
             </form>
           </div>
 
@@ -553,17 +591,26 @@ export default function Admin() {
             <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Αποθήκη Προϊόντων</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {products.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px', background: p.stock <= 2 ? '#f8d7da' : 'transparent' }}>
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                     <img src={p.image_url} alt="img" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} />
-                    <div>
+                   <div>
                       <strong style={{ fontSize: '1.05rem' }}>{p.name}</strong><br/>
                       <span style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(p.price).toFixed(2)}€</span>
-                      <small style={{ marginLeft: '15px', color: p.stock <= 2 ? '#721c24' : '#6c757d', fontWeight: 'bold' }}>Απόθεμα: {p.stock}</small>
+                      <small style={{ 
+                        marginLeft: '15px', 
+                        color: p.stock <= 2 ? '#721c24' : '#6c757d', 
+                        fontWeight: 'bold',
+                        background: p.stock <= 2 ? '#f8d7da' : '#e9ecef',
+                        padding: '3px 8px',
+                        borderRadius: '12px'
+                      }}>
+                        📦 Απόθεμα: {p.stock}
+                      </small>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setProductForm(p)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
+                    <button onClick={() => setProductForm(p)} style={{ background: '#ffc107', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>✏️</button>
                     <button onClick={() => handleDeleteProduct(p.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
                   </div>
                 </div>
@@ -614,21 +661,63 @@ export default function Admin() {
 
           <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
             <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Κατάλογος Υπηρεσιών</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {services.map(s => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
-                  <div>
-                    <span style={{ fontSize: '0.75rem', background: '#e9ecef', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', color: '#495057' }}>{s.category}</span>
-                    <strong style={{ fontSize: '1.05rem', display: 'block', marginTop: '5px' }}>{s.name}</strong>
-                    <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.95rem' }}>{Number(s.price).toFixed(2)}€</span>
-                    <span style={{ marginLeft: '15px', color: '#dc3545', fontWeight: '500', fontSize: '0.85rem' }}>⏱️ {s.duration_minutes} λεπτά</span>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
+              {['Χέρια', 'Πόδια', 'Πρόσωπο'].map(category => {
+                const categoryServices = services.filter(s => s.category === category);
+                
+                if (categoryServices.length === 0) return null; 
+
+                return (
+                  <div key={category}>
+                    <h4 style={{ color: '#bc9c82', borderBottom: '2px solid #f1ece8', paddingBottom: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>
+                      {category === 'Χέρια' ? '💅' : category === 'Πόδια' ? '👣' : '✨'} {category}
+                    </h4>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {categoryServices.map(s => (
+                        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
+                          <div>
+                            <strong style={{ fontSize: '1.05rem', display: 'block' }}>{s.name}</strong>
+                            <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.95rem' }}>{Number(s.price).toFixed(2)}€</span>
+                            <span style={{ marginLeft: '15px', color: '#dc3545', fontWeight: '500', fontSize: '0.85rem' }}>⏱️ {s.duration_minutes} λεπτά</span>
+                            {s.description && (
+                              <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>{s.description}</p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => setServiceForm(s)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
+                            <button onClick={() => handleDeleteService(s.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setServiceForm(s)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
-                    <button onClick={() => handleDeleteService(s.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
+                );
+              })}
+              
+              {/* Αν υπάρχει κάποια υπηρεσία με άλλη/λάθος κατηγορία */}
+              {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).length > 0 && (
+                <div>
+                  <h4 style={{ color: '#6c757d', borderBottom: '2px solid #f1ece8', paddingBottom: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>Άλλες Υπηρεσίες</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).map(s => (
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
+                        <div>
+                          <span style={{ fontSize: '0.75rem', background: '#e9ecef', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', color: '#495057' }}>{s.category}</span>
+                          <strong style={{ fontSize: '1.05rem', display: 'block', marginTop: '5px' }}>{s.name}</strong>
+                          <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.95rem' }}>{Number(s.price).toFixed(2)}€</span>
+                          <span style={{ marginLeft: '15px', color: '#dc3545', fontWeight: '500', fontSize: '0.85rem' }}>⏱️ {s.duration_minutes} λεπτά</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => setServiceForm(s)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
+                          <button onClick={() => handleDeleteService(s.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -758,6 +847,22 @@ export default function Admin() {
           )}
         </div>
       )}
+
+      <ToastContainer position="top-right" autoClose={3000} style={{zIndex: 999999 }}/>
+      
+      {confirmDialog.isOpen && (
+        <div className="pro-modal-overlay">
+          <div className="pro-modal" style={{ textAlign: 'center' }}>
+            <h3 style={{ color: '#3b2b1f', marginBottom: '15px' }}>{confirmDialog.title}</h3>
+            <p style={{ color: '#495057', marginBottom: '25px', lineHeight: '1.5' }}>{confirmDialog.message}</p>
+            <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="pro-btn primary" onClick={confirmDialog.onConfirm}>Ναι, Επιβεβαίωση</button>
+              <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })}>Άκυρο</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

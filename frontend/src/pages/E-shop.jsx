@@ -62,9 +62,15 @@ function Shop({ cart, setCart }) {
             <div key={product.id} className="product-card">
               <div className="product-image-container">
                 <img src={product.image_url || 'https://picsum.photos/200'} alt={product.name} className="product-image" />
+                {product.stock <= 0 ? (
+                  <button disabled style={{ background: '#6c757d', color: '#fff', cursor: 'not-allowed' }}>
+                    🚫 Εξαντλήθηκε
+                  </button>
+                ) : (
                 <button className="add-to-cart-btn" onClick={() => addToCart(product)}>
                   Προσθήκη
                 </button>
+                )}
               </div>
               <div className="product-info">
                 <h3 className="product-name">{product.name}</h3>

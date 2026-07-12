@@ -38,6 +38,20 @@ function App() {
     <div>
       <BrowserRouter>
       <Header cart={cart} setCart={setCart}/>
+      <CookieConsent
+          location="bottom"
+          buttonText="Αποδοχή Όλων"
+          declineButtonText="Απόρριψη"
+          enableDeclineButton
+          cookieName="vdnails_gdpr_consent"
+          style={{ background: "#111827", color: "#fff", fontSize: "14px" }}
+          buttonStyle={{ background: "#10b981", color: "#fff", fontSize: "14px", fontWeight: "bold", borderRadius: "6px" }}
+          declineButtonStyle={{ background: "transparent", color: "#e5e7eb", fontSize: "14px", textDecoration: "underline" }}
+          expires={150} // Κρατάει την επιλογή του για 150 μέρες
+        >
+          Χρησιμοποιούμε cookies για να βελτιώσουμε την εμπειρία σας στο κατάστημά μας. 
+          Μπορείτε να δείτε αναλυτικά την <a href="/privacy-policy" style={{ color: "#10b981" }}>Πολιτική Απορρήτου</a> μας.
+        </CookieConsent>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
@@ -60,20 +74,6 @@ function App() {
           <Route path="/notfound" element={<NotFound />} />
         </Routes>
         <Footer />
-        <CookieConsent
-          location="bottom"
-          buttonText="Αποδοχή Όλων"
-          declineButtonText="Απόρριψη"
-          enableDeclineButton
-          cookieName="vdnails_gdpr_consent"
-          style={{ background: "#111827", color: "#fff", fontSize: "14px" }}
-          buttonStyle={{ background: "#10b981", color: "#fff", fontSize: "14px", fontWeight: "bold", borderRadius: "6px" }}
-          declineButtonStyle={{ background: "transparent", color: "#e5e7eb", fontSize: "14px", textDecoration: "underline" }}
-          expires={150} // Κρατάει την επιλογή του για 150 μέρες
-        >
-          Χρησιμοποιούμε cookies για να βελτιώσουμε την εμπειρία σας στο κατάστημά μας. 
-          Μπορείτε να δείτε αναλυτικά την <a href="/privacy-policy" style={{ color: "#10b981" }}>Πολιτική Απορρήτου</a> μας.
-        </CookieConsent>
       </BrowserRouter>
     </div>
   )

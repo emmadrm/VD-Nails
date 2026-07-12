@@ -53,6 +53,7 @@ const initDatabase = async () => {
         payment_type VARCHAR(50) NOT NULL,
         service_price NUMERIC(10,2) NOT NULL,
         payment_status VARCHAR(50) DEFAULT 'pending',
+        duration INT DEFAULT NULL,
         status VARCHAR(20) DEFAULT 'confirmed',
         stripe_payment_intent_id VARCHAR(255),
         user_id INT,

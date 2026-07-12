@@ -62,6 +62,7 @@ export default function Profile() {
   };
 
  const cancelAppointment = (apt) => {
+  window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
   setConfirmDialog({
     isOpen: true,
     title: 'Ακύρωση Ραντεβού',
@@ -79,10 +80,12 @@ export default function Profile() {
       toast.error("Η αλλαγή ραντεβού επιτρέπεται μόνο έως και 24 ώρες πριν.");
       return;
     }
-    setRescheduleModal({ isOpen: true, aptId: apt.id, date: apt.appointment_date.split('T')[0], time: apt.appointment_time.slice(0,5) });
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
+    setRescheduleModal({ isOpen: true, aptId: apt.id, date: apt.appointment_date.slice(0,10), time: apt.appointment_time.slice(0,5) });
   };
 
   const submitReschedule = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`);
       const bookedSlots = await res.json();
@@ -107,10 +110,13 @@ export default function Profile() {
     } catch (err) {
       console.error(err);
       toast.error("Σφάλμα επικοινωνίας.");
+    } finally {
+      setLoading(false);
     }
   };
 
 const cancelOrder = (orderId) => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   setConfirmDialog({
     isOpen: true,
     title: 'Ακύρωση Παραγγελίας',
@@ -235,45 +241,29 @@ const cancelOrder = (orderId) => {
       {/* MODAL ΜΕΤΑΘΕΣΗΣ */}
       {rescheduleModal.isOpen && (
         <div className="pro-modal-overlay">
-          <div className="pro-modal" style={{ maxWidth: '400px' }}>
+          <div className="pro-modal">
             <h3>Επιλογή νέας ώρας</h3>
-            
-            {/* 1. Επιλογή Ημερομηνίας */}
-            <input 
-              type="date" 
-              className="pro-input" 
-              value={rescheduleModal.date} 
-              onChange={(e) => setRescheduleModal({...rescheduleModal, date: e.target.value})} 
-            />
-
-            {/* 2. Εδώ καλείς τη λογική για τις διαθέσιμες ώρες */}
+            <input type="date" className="pro-input" value={rescheduleModal.date} onChange={(e) => setRescheduleModal({...rescheduleModal, date: e.target.value})} />
             <div className="time-slots-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '15px' }}>
               {['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'].map(time => (
-                <button 
-                  key={time}
-                  className={`time-slot ${rescheduleModal.time === time ? 'selected' : ''}`}
-                  onClick={() => setRescheduleModal({...rescheduleModal, time})}
-                  style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd', background: rescheduleModal.time === time ? '#bc9c82' : '#fff' }}
-                >
-                  {time}
-                </button>
+                <button key={time} className={`time-slot ${rescheduleModal.time === time ? 'selected' : ''}`} onClick={() => setRescheduleModal({...rescheduleModal, time})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd', background: rescheduleModal.time === time ? '#bc9c82' : '#fff' }}>{time}</button>
               ))}
             </div>
-
-            <div className="pro-modal-actions" style={{ marginTop: '20px' }}>
-              <button className="pro-btn primary" onClick={submitReschedule}>Αποθήκευση</button>
+            <div className="pro-modal-actions">
+              <button className="pro-btn primary" onClick={submitReschedule} disabled={loading}>{loading ? '...' : 'Επιβεβαίωση'}</button>
               <button className="pro-btn secondary" onClick={() => setRescheduleModal({...rescheduleModal, isOpen: false})}>Άκυρο</button>
             </div>
           </div>
         </div>
       )}
-      <ToastContainer position="top-center" autoClose={3000} />
+
+      {/* CONFIRM DIALOG - ΠΙΟ ΚΑΘΑΡΟ */}
       {confirmDialog.isOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999 }}>
-          <div style={{ background: '#fff', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }}>
+        <div className="pro-modal-overlay">
+          <div className="pro-modal" style={{ textAlign: 'center' }}>
             <h3>{confirmDialog.title}</h3>
-            <p style={{ margin: '20px 0', color: '#555' }}>{confirmDialog.message}</p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <p>{confirmDialog.message}</p>
+            <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
               <button className="pro-btn primary" onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({...confirmDialog, isOpen: false}); }}>Ναι, Επιβεβαίωση</button>
               <button className="pro-btn secondary" onClick={() => setConfirmDialog({...confirmDialog, isOpen: false})}>Άκυρο</button>
             </div>

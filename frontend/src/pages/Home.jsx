@@ -3,7 +3,6 @@ import '../index.css';
 import store from '../assets/store.JPG';
 import { Link } from 'react-router-dom';
 
-
 function Home() {
   return (
     <div>
@@ -12,7 +11,6 @@ function Home() {
         <Link to="/services" className="mirror-button">
           Κλείστε Ραντεβού
         </Link>
-        
         <svg className="svg-clip">
           <defs>
             <clipPath id="mirror-clip" transform="scale(0.3) translate(46, -57)">
