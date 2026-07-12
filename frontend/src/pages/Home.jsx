@@ -1,13 +1,13 @@
 import React from 'react';
 import '../index.css';
-import example from '../assets/example.jpg';
+import store from '../assets/store.JPG';
 import { Link } from 'react-router-dom';
 
 
 function Home() {
   return (
     <div>
-      <img src={example} className='salon-image' alt="VD Nails Space" />
+      <img src={store} className='salon-image' alt="VD Nails Space" />
       <div className="button-container">
         <Link to="/services" className="mirror-button">
           Κλείστε Ραντεβού

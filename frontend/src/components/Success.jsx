@@ -4,7 +4,7 @@ import '../index.css';
 
 export default function Success() {
   const location = useLocation();
-  // Παίρνουμε την πληροφορία από το state που στείλαμε
+  // Παίρνουμε την πληροφορία από το state που στείλαμε (από το Checkout ή το Booking)
   const isAppointment = location.state?.isAppointment || false;
 
   return (
@@ -19,7 +19,10 @@ export default function Success() {
           </div>
         </div>
 
-        <h1 className="success-title">Ευχαριστούμε!</h1>
+        <h1 className="success-title">
+          {isAppointment ? 'Ευχαριστούμε!' : 'Ευχαριστούμε!'}
+        </h1>
+        
         <p className="success-message">
           {isAppointment 
             ? "Η κράτησή σας ολοκληρώθηκε με επιτυχία." 
@@ -29,7 +32,7 @@ export default function Success() {
         <div className="success-details">
           {isAppointment ? (
             <p>
-              Θα λάβετε σύντομα ένα <strong>email επιβεβαίωσης</strong> με τις λεπτομέρειες του ραντεβού σας και τις οδηγίες για την επίσκεψή σας.
+              Θα λάβετε σύντομα ένα <strong>email επιβεβαίωσης</strong> με τις λεπτομέρειες του ραντεβού σας και τις οδηγίες για την επίσκεψή σας. Ανυπομονούμε να σας δούμε!
             </p>
           ) : (
             <p>

@@ -1,50 +1,88 @@
 
 /* Full-Page */
 body {
-    backdrop-filter: blur(100px);
-    background: linear-gradient(0deg,rgba(110, 80, 52, 1) 0%, rgba(196, 164, 132, 1) 100%);
+    backdrop-filter: blur(0px);
+   /* background: linear-gradient(0deg, rgb(69, 138, 152) 20%, rgb(190, 210, 214) 100%); 
+    background: #BED2D6; */
+   background-image: url('./assets/back.jpg');
+   overflow-x: hidden;
+   width: 100%;
+   
+
 }
 
 /* Header */
+.header-spacer {
+  width: 120px; 
+}
+
+.premium-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.premium-nav-link {
+  color: #24211e; 
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-decoration: none;
+  padding: 8px 12px;
+  position: relative;
+  transition: color 0.3s ease;
+}
+
+.premium-nav-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: 0;
+  left: 50%;
+  background-color: #252322;
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.premium-nav-link:hover {
+  color: #7b7671;
+}
+
+.premium-nav-link:hover::after {
+  width: 100%;
+}
+
+.header-icon-btn {
+  color: #3b2b1f;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.header-icon-btn:hover {
+  color: #948f8c;
+  transform: scale(1.08); 
+}
+
 .Header {
-    background-color: transparent;
+  background-color: transparent; 
 }
 .Header .logo-text {
     font-family: "Instrument Serif", serif;
     font-weight: 100;
     font-style: normal; 
     font-size: 2.5rem;
-    color: #ffffff;
+    color: #5b5454;
     margin-left: 0.5rem;
 }
 .Header .logo-image {
     width: 150px;
     height: 100px;
     border-radius: 60%;
-}
-.full-width-menu {
-    width: 100%;
-    display: flex;
-    justify-content: space-evenly;
-    gap: 1rem;
-    padding: 0.5rem 0;
-}
-.full-width-menu .nav-item {
-    flex: 1;
-    text-align: center;
-}
-.full-width-menu .nav-link {
-    color: #ffffff;
-    font-weight: 600;
-    font-size: 1.3rem;
-    transition: all 0.3s ease;
-    position: relative;
-}
-.full-width-menu .nav-link:hover {
-    color: #f0f0f0;
-    text-decoration: underline;
-    transform: translateY(-5px);
-    text-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Home Page */
@@ -53,6 +91,8 @@ body {
     margin: 10px 10%;
     height: auto;
     border-radius: 15px;
+    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.3));
+    filter:opacity(80%)
 }
 .button-container {
   display: flex;
@@ -61,7 +101,7 @@ body {
   margin: 10px 0;
 }
 .mirror-button {
-  background: linear-gradient(135deg, #c9c8c8 0%, #a9a6a6 100%);
+  background: linear-gradient(135deg, #efecec 0%, #b0aaaa 100%);
   color: #1d1c1c !important;
   font-size: 1.2rem;
   font-weight: 600;
@@ -78,7 +118,7 @@ body {
   
   clip-path: url(#mirror-clip);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 15px rgba(128, 128, 128, 0.3);
+  box-shadow: 0 4px 15px rgba(236, 230, 230, 0.3);
   position: relative;
   overflow: hidden;
 
@@ -98,7 +138,7 @@ body {
 }
 
 .mirror-button:hover {
-  background: linear-gradient(135deg, #808080 0%, #a0a0a0 100%);
+  background: linear-gradient(135deg, #bebbbb 0%, #bab4b4 100%);
   transform: translateY(-4px) scale(1.05);
   box-shadow: 0 8px 25px rgba(128, 128, 128, 0.4);
 }
@@ -125,6 +165,11 @@ footer .logo-image {
     border-radius: 60%;
 }
 
+footer {
+ background-color: #d8dede;
+ color: black;
+}
+
 /* services */
 .icon-link {
     display: inline-flex;
@@ -132,8 +177,8 @@ footer .logo-image {
     justify-content: center;
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
-    background: linear-gradient(135deg, #6e4a32 0%, #c4a08c 100%);
-    color: #ffffff !important;
+    background: linear-gradient(135deg, #c2bebc 0%, #7a7978 100%);
+    color: #efe8e8 !important;
     text-decoration: none !important;
     border-radius: 50px;
     font-weight: 600;
@@ -160,10 +205,11 @@ footer .logo-image {
 }
 
 .icon-link:hover {
-    background: linear-gradient(135deg, #c4a08c 0%, #6e4a32 100%);
+    background: linear-gradient(135deg, #6d6967 0%, #7d7672 100%);
     transform: translateY(-4px) scale(1.05);
     box-shadow: 0 8px 25px rgba(110, 74, 50, 0.4);
     border-color: rgba(255, 255, 255, 0.3);
+    color: #f5f5f5 !important;
 }
 
 .icon-link:hover::before {
@@ -211,6 +257,36 @@ footer .logo-image {
     }
 }
 
+/* Service Details Page */
+.premium-btn {
+  background-color: #3b2b1f;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 30px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 1px solid #3b2b1f;
+}
+
+.premium-btn:hover {
+  background-color: #fff;
+  color: #3b2b1f;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.service-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid #f1ece8 !important;
+}
+
+.service-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 15px 30px rgba(59, 43, 31, 0.1) !important;
+}
+
 /* Booking Page */
 
 .booking-wrapper {
@@ -241,88 +317,11 @@ footer .logo-image {
   font-family: 'Georgia', serif; 
 }
 
-.booking-subtitle {
-  color: #6e5034;
-  text-align: center;
-  margin-bottom: 30px;
-  font-size: 0.95rem;
-}
-
-.booking-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-row {
-  display: flex;
-  gap: 20px;
-}
-
-.half-width {
-  flex: 1;
-}
-
 .form-group label {
   font-size: 0.9rem;
   color: #4a3b2c;
   margin-bottom: 8px;
   font-weight: bold;
-}
-
-.form-group input,
-.form-group select {
-  padding: 12px 15px;
-  border-radius: 10px;
-  border: 1px solid #d4c4b7;
-  background-color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  color: #333;
-  outline: none;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  border-color: #6e5034;
-  box-shadow: 0 0 0 3px rgba(110, 80, 52, 0.15);
-}
-
-@media (max-width: 600px) {
-  .form-row {
-    flex-direction: column;
-    gap: 20px;
-  }
-  .glass-card {
-    padding: 30px 20px;
-  }
-}
-
-.custom-picker-container .react-datepicker-wrapper {
-  width: 100%;
-}
-
-.elegant-input {
-  width: 100%;
-  padding: 12px 15px;
-  border-radius: 10px;
-  border: 1px solid #d4c4b7;
-  background-color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  color: #333;
-  outline: none;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  box-sizing: border-box;
-}
-
-.elegant-input:focus {
-  border-color: #6e5034;
-  box-shadow: 0 0 0 3px rgba(110, 80, 52, 0.15);
 }
 
 .react-datepicker {
@@ -345,16 +344,13 @@ footer .logo-image {
   color: white !important;
 }
 
-.react-datepicker__day--selected, 
-.react-datepicker__day--keyboard-selected,
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item--selected {
+.react-datepicker__day--selected {
   background-color: #6e5034 !important;
   color: white !important;
   font-weight: bold;
 }
 
-.react-datepicker__day:hover,
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item:hover {
+.react-datepicker__day:hover {
   background-color: #d4c4b7 !important;
   color: #4a3b2c !important;
 }
@@ -366,24 +362,10 @@ footer .logo-image {
   margin-bottom: 0;
 }
 
-.radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.radio-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 1rem;
-  color: #333;
-}
-
-.radio-label input[type="radio"] {
-  margin: 0;
-  accent-color: #6e5034; 
+@media (max-width: 600px) {
+  .glass-card {
+    padding: 30px 20px;
+  }
 }
 
 /* Contact Page */
@@ -392,7 +374,7 @@ footer .logo-image {
   display: flex;
   width: 100%;
   max-width: 900px; 
-  background-color: #3b2b1f; 
+  background-color: #d8dede; 
   border-radius: 20px; 
   overflow: hidden; 
   box-shadow: 0 25px 50px rgba(0,0,0,0.3); 
@@ -401,7 +383,7 @@ footer .logo-image {
 .compact-content {
   flex: 1;
   padding: 50px 40px;
-  color: #f3eae1;
+  color: #111010;
 }
 
 .compact-map {
@@ -413,13 +395,13 @@ footer .logo-image {
   font-size: 2.8rem;
   font-family: 'Georgia', serif;
   margin-bottom: 10px;
-  color: #d4c4b7;
+  color: #161514;
 }
 
 .compact-subtitle {
   font-size: 1rem;
   line-height: 1.5;
-  color: #b5a392;
+  color: #635f5c;
   margin-bottom: 35px;
 }
 
@@ -448,7 +430,7 @@ footer .logo-image {
 .svg-icon-container svg {
   width: 22px;
   height: 22px;
-  stroke: #d4c4b7; 
+  stroke: #554c46; 
 }
 
 .detail-text {
@@ -460,13 +442,13 @@ footer .logo-image {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  color: #b5a392;
+  color: #65594e;
 }
 
 .detail-text span,
 .detail-text a {
   font-size: 1.1rem;
-  color: #f3eae1;
+  color: #4a423a;
   text-decoration: none;
   margin-top: 3px;
 }
@@ -475,7 +457,7 @@ footer .logo-image {
   transition: color 0.3s ease;
 }
 .insta-link:hover {
-  color: #d4c4b7;
+  color: #564e48;
 }
 
 .compact-actions {
@@ -497,23 +479,24 @@ footer .logo-image {
 }
 
 .outline-btn {
-  border: 1px solid #d4c4b7;
-  color: #d4c4b7;
+  border: 1px solid #5e534b;
+  color: #2f2a26;
 }
 
 .outline-btn:hover {
-  background: #d4c4b7;
-  color: #3b2b1f;
+  background: #3b3836;
+  color: #dad4d0;
 }
 
 .solid-btn {
-  background: #d4c4b7;
-  color: #3b2b1f;
+  background: #615f5d;
+  color: #eae8e7;
   border: 1px solid #d4c4b7;
 }
 
 .solid-btn:hover {
-  background: #ffffff;
+  background: #d3cfcf;
+  color: #3b2b1f;
   border-color: #ffffff;
 }
 
@@ -548,7 +531,6 @@ footer .logo-image {
 /* E-shop page */
 
 .shop-wrapper {
-  background-color: #faf8f5; 
   min-height: 100vh;
   padding: 40px 8%;
   color: #3b2b1f;
@@ -559,7 +541,7 @@ footer .logo-image {
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 50px;
-  border-bottom: 1px solid #eaddd3;
+  border-bottom: 1px solid #63605d;
   padding-bottom: 20px;
 }
 
@@ -572,7 +554,7 @@ footer .logo-image {
 
 .shop-subtitle {
   font-size: 1.1rem;
-  color: #8c7b6c;
+  color: #605851;
   margin: 5px 0 0 0;
 }
 
@@ -587,7 +569,7 @@ footer .logo-image {
 .cart-toggle-btn svg {
   width: 32px;
   height: 32px;
-  stroke: #3b2b1f;
+  stroke: #3a3735;
   transition: transform 0.3s ease;
 }
 
@@ -599,8 +581,8 @@ footer .logo-image {
   position: absolute;
   top: 0;
   right: 0;
-  background-color: #d4c4b7;
-  color: #fff;
+  background-color: #0f0f0e;
+  color: #eee9e9;
   font-size: 0.75rem;
   font-weight: bold;
   width: 20px;
@@ -647,7 +629,7 @@ footer .logo-image {
   bottom: -50px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: #3b2b1f;
+  background-color: #201f1e;
   color: white;
   border: none;
   padding: 12px 25px;
@@ -665,19 +647,12 @@ footer .logo-image {
 }
 
 .add-to-cart-btn:hover {
-  background-color: #d4c4b7;
+  background-color: #a39991;
 }
 
 .product-info {
   text-align: center;
   padding-top: 15px;
-}
-
-.product-category {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: #a89a8e;
 }
 
 .product-name {
@@ -837,7 +812,7 @@ footer .logo-image {
 
 @media (max-width: 1024px) {
   .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, 200px);
     gap: 20px;
   }
   .shop-title {
@@ -857,7 +832,7 @@ footer .logo-image {
   }
 }
 
-/* --- ΣΕΛΙΔΑ CHECKOUT --- */
+/* checkout page */
 
 .checkout-wrapper {
   background-color: #faf8f5;
@@ -889,7 +864,6 @@ footer .logo-image {
   align-items: flex-start;
 }
 
-/* Αριστερή Στήλη */
 .payment-section {
   flex: 2;
   display: flex;
@@ -940,7 +914,6 @@ footer .logo-image {
   background: #ffffff;
 }
 
-/* Διάταξη πεδίων δίπλα-δίπλα για μεγαλύτερες οθόνες */
 .form-row {
   display: flex;
   gap: 20px;
@@ -950,7 +923,6 @@ footer .logo-image {
   flex: 1;
 }
 
-/* Στα κινητά τα βάζουμε το ένα κάτω από το άλλο για να μην στριμώχνονται */
 @media (max-width: 600px) {
   .form-row {
     flex-direction: column;
@@ -1012,7 +984,7 @@ footer .logo-image {
   background-color: #d4c4b7;
 }
 
-/* Δεξιά Στήλη */
+/* Δεξιά Στήλη checkout */
 .summary-section {
   flex: 1;
   background: #ffffff;
@@ -1083,10 +1055,9 @@ footer .logo-image {
   stroke: #8c7b6c;
 }
 
-/* Responsive */
 @media (max-width: 900px) {
   .checkout-container {
-    flex-direction: column-reverse; /* Στα κινητά η σύνοψη πάει πάνω από την πληρωμή! */
+    flex-direction: column-reverse; 
   }
   .payment-section, .summary-section {
     width: 100%;
@@ -1096,9 +1067,6 @@ footer .logo-image {
   }
 }
 
-/* --- EXTRA ΣΤΥΛ ΓΙΑ ΤΟ ΤΕΛΕΙΟ CHECKOUT (BOXNOW / ΚΑΡΤΕΣ) --- */
-
-/* Κάρτες Επιλογής Τρόπου Αποστολής */
 .shipping-methods-container {
   display: flex;
   flex-direction: column;
@@ -1121,7 +1089,6 @@ footer .logo-image {
   border-color: #cbbab0;
 }
 
-/* Όταν η κάρτα είναι επιλεγμένη */
 .shipping-method-card.selected {
   border-color: #3b2b1f;
   background: #ffffff;
@@ -1131,7 +1098,7 @@ footer .logo-image {
 .shipping-method-card input[type="radio"] {
   width: 20px;
   height: 20px;
-  accent-color: #3b2b1f; /* Κάνει το radio button καφέ */
+  accent-color: #3b2b1f; 
   cursor: pointer;
 }
 
@@ -1166,7 +1133,7 @@ footer .logo-image {
 .boxnow-map-btn {
   width: 100%;
   padding: 15px;
-  background-color: #10b981; /* Το χαρακτηριστικό πράσινο της BoxNow */
+  background-color: #10b981; 
   color: white;
   border: none;
   border-radius: 8px;
@@ -1183,21 +1150,20 @@ footer .logo-image {
 .boxnow-selected-locker {
   margin-top: 15px;
   padding: 15px;
-  background-color: #ecfdf5; /* Απαλό πράσινο φόντο */
+  background-color: #ecfdf5; 
   border: 1px solid #10b981;
   border-radius: 8px;
   color: #065f46;
   font-size: 0.95rem;
 }
 
-/* Textarea Σχολίων */
 textarea {
   padding: 15px;
   border: 1px solid #eaddd3;
   border-radius: 8px;
   font-size: 1rem;
   font-family: inherit;
-  resize: vertical; /* Επιτρέπει στον χρήστη να το μεγαλώσει μόνο προς τα κάτω */
+  resize: vertical; 
 }
 
 textarea:focus {
@@ -1205,7 +1171,6 @@ textarea:focus {
   border-color: #3b2b1f;
 }
 
-/* Checkbox Όρων Χρήσης */
 .terms-checkbox {
   margin-top: 30px;
   margin-bottom: 15px;
@@ -1231,7 +1196,6 @@ textarea:focus {
   font-weight: bold;
 }
 
-/* Ανάλυση Συνόλου (Μερικό / Μεταφορικά) */
 .summary-costs {
   display: flex;
   flex-direction: column;
@@ -1252,7 +1216,7 @@ textarea:focus {
   justify-content: center;
   min-height: 80vh;
   padding: 20px;
-  background-color: #fcfaf8; /* Το απαλό φόντο που έχεις */
+  background-color: #fcfaf8; 
 }
 
 .success-card {
@@ -1266,7 +1230,7 @@ textarea:focus {
 }
 
 .success-title {
-  font-family: 'Playfair Display', serif; /* Αν έχεις serif γραμματοσειρά */
+  font-family: 'Playfair Display', serif; 
   color: #3b2b1f;
   font-size: 2.2rem;
   margin-bottom: 10px;
@@ -1303,7 +1267,6 @@ textarea:focus {
   transform: translateY(-2px);
 }
 
-/* Checkmark Animation */
 .success-icon-container {
   margin-bottom: 30px;
 }
@@ -1335,4 +1298,335 @@ textarea:focus {
 
 @keyframes stroke {
   100% { stroke-dashoffset: 0; }
+}
+
+/* profile page */
+.header-auth-section { 
+  position: relative; 
+  margin: 0 12px;
+}
+
+.pro-header-btn { 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; /* Κενό ανάμεσα στο όνομα και το βελάκι */
+  background: transparent; 
+  border: 1px solid #e5e7eb; 
+  padding: 8px 14px; 
+  border-radius: 6px; 
+  font-size: 0.9rem; 
+  font-weight: 500; 
+  cursor: pointer; 
+  color: #111827; 
+  transition: 0.2s; 
+  max-width: 160px;
+}
+
+.pro-header-btn:hover { 
+  background: #f9fafb; 
+  border-color: #d1d5db; 
+}
+
+.pro-header-btn.login-btn { 
+  background: #111827; 
+  color: white; 
+  border: none; 
+}
+
+.pro-header-btn.login-btn:hover { 
+  background: #374151; 
+}
+
+.pro-dropdown { 
+  position: absolute; 
+  top: 45px; right: 0; 
+  width: 220px; 
+  background: white; 
+  border: 1px solid #e5e7eb; 
+  border-radius: 8px; 
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); 
+  z-index: 100; 
+  overflow: hidden; 
+}
+
+.pro-dropdown-header { 
+  padding: 15px; 
+  border-bottom: 1px solid #f3f4f6; 
+  background: #f9fafb; 
+}
+
+.pro-dropdown-header strong { 
+  display: block; 
+  font-size: 0.9rem; 
+  color: #111827; 
+}
+
+.pro-dropdown-header span { 
+  display: block; 
+  font-size: 0.8rem; 
+  color: #6b7280; 
+  margin-top: 2px; 
+}
+
+.pro-dropdown-item { 
+  display: block; 
+  width: 100%; 
+  text-align: left; 
+  padding: 12px 15px; 
+  background: none; 
+  border: none; 
+  font-size: 0.9rem; 
+  cursor: pointer; 
+  color: #374151; 
+  border-bottom: 1px solid #f3f4f6; 
+}
+
+.pro-dropdown-item:hover { 
+  background: #f9fafb; 
+}
+
+.pro-dropdown-item.text-danger { 
+  color: #dc2626; 
+  border-bottom: none; 
+}
+
+.pro-btn-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pro-btn-arrow {
+  font-size: 0.8rem;
+}
+
+/* --- PRO PROFILE LAYOUT --- */
+.pro-layout { 
+  max-width: 1000px; 
+  margin: 40px auto; 
+  padding: 0 20px; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+}
+
+.pro-split-layout { 
+  display: grid; 
+  grid-template-columns: 1fr; 
+  gap: 24px; 
+  margin-top: 24px; 
+}
+
+@media (max-width: 600px) {
+  .pro-header-btn {
+    padding: 6px 10px;
+    max-width: 120px;
+  }
+  .header-auth-section {
+    margin: 0 8px; /* Λίγο μικρότερο κενό στα κινητά για να χωράνε όλα */
+  }
+  .pro-dropdown {
+    width: 190px;
+    right: -10px; /* Κεντράρει λίγο καλύτερα το μενού κάτω από το κουμπί */
+  }
+}
+
+.pro-panel { 
+  background: #fff; 
+  border: 1px solid #e5e7eb; 
+  border-radius: 8px; 
+  padding: 24px; 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+}
+
+.pro-panel h2 { 
+  font-size: 1.1rem; 
+  font-weight: 600; 
+  color: #111827; 
+  margin: 0 0 20px 0; 
+  padding-bottom: 15px; 
+  border-bottom: 1px solid #f3f4f6; 
+}
+
+/* Edit Form */
+.pro-panel-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: baseline; 
+  border-bottom: 1px solid #f3f4f6; 
+  margin-bottom: 20px; 
+  padding-bottom: 15px; 
+}
+
+.pro-panel-header h2 { 
+  border: none; 
+  margin: 0; 
+  padding: 0; 
+}
+
+.pro-info-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+  gap: 20px; 
+}
+
+.pro-info-grid label { 
+  font-size: 0.8rem; 
+  color: #6b7280; 
+  text-transform: uppercase; 
+  letter-spacing: 0.5px; 
+  display: block; 
+  margin-bottom: 4px;
+}
+
+.pro-info-grid p { 
+  font-size: 1rem; 
+  color: #111827; 
+  margin: 0; 
+  font-weight: 500; 
+}
+
+.pro-form-grid { 
+  display: grid; 
+  gap: 16px; 
+  max-width: 500px; 
+}
+
+.pro-input-group label { 
+  display: block; 
+  font-size: 0.85rem; 
+  font-weight: 500; 
+  color: #374151; 
+  margin-bottom: 6px; 
+}
+
+.pro-input { 
+  width: 100%; 
+  padding: 10px 12px; 
+  border: 1px solid #d1d5db; 
+  border-radius: 6px; 
+  font-size: 0.95rem; 
+  color: #111827; 
+  outline: none; 
+  transition: border 0.2s; 
+  box-sizing: border-box; 
+}
+
+.pro-input:focus { 
+  border-color: #111827; 
+  box-shadow: 0 0 0 1px #111827; 
+}
+
+.pro-input.disabled { 
+  background: #f9fafb; 
+  color: #6b7280; 
+  cursor: not-allowed;
+}
+
+.pro-form-actions { 
+  display: flex; 
+  gap: 10px; 
+  margin-top: 10px; 
+}
+
+/* Lists (Orders & Appointments) */
+.pro-empty { font-size: 0.9rem; color: #6b7280; }
+.pro-list { display: flex; flex-direction: column; gap: 16px; }
+.pro-list-item { border: 1px solid #f3f4f6; border-radius: 6px; padding: 16px; background: #fafafa; }
+.pro-item-details { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.pro-service-name { font-weight: 600; color: #111827; font-size: 0.95rem; }
+.pro-date { font-size: 0.85rem; color: #6b7280; }
+.pro-item-actions { display: flex; gap: 15px; }
+
+/* Orders Specific */
+.order-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+.order-id { font-weight: 600; font-size: 0.9rem; color: #111827; }
+.order-products { margin-bottom: 15px; font-size: 0.85rem; color: #4b5563; }
+.product-row { margin-bottom: 4px; }
+.product-qty { font-weight: 600; color: #111827; }
+.order-bottom { display: flex; justify-content: space-between; align-items: center; }
+.order-total { font-weight: 700; font-size: 1rem; color: #111827; }
+
+/* Badges & Buttons */
+.pro-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; }
+.pro-badge.pending { background: #fef3c7; color: #92400e; }
+.pro-badge.shipped { background: #d1fae5; color: #065f46; }
+.pro-badge.cancelled { background: #fee2e2; color: #991b1b; }
+
+.pro-btn { padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; font-weight: 500; cursor: pointer; border: none; }
+.pro-btn.primary { background: #111827; color: #fff; }
+.pro-btn.primary:hover { background: #374151; }
+.pro-btn.secondary { background: #f3f4f6; color: #374151; }
+.pro-btn.secondary:hover { background: #e5e7eb; }
+
+.pro-link-btn { 
+  background: none; 
+  border: none; 
+  padding: 0; 
+  font-size: 0.85rem; 
+  font-weight: 500; 
+  cursor: pointer; 
+  color: #111827; 
+  text-decoration: underline; 
+}
+
+.pro-link-btn:hover { 
+  color: #374151; 
+}
+
+.pro-link-btn.danger { 
+  color: #dc2626; text-decoration: none; 
+}
+
+.pro-link-btn.danger:hover { 
+  text-decoration: underline; 
+}
+
+/* Modal */
+.pro-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;    
+  height: 100vh;  
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;   
+  justify-content: center; 
+  z-index: 9999;
+}
+.pro-modal { 
+  background: #fff; 
+  width: 100%; 
+  max-width: 400px; 
+  padding: 24px; 
+  border-radius: 8px; 
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); 
+}
+
+.pro-modal h3 { 
+  margin: 0 0 20px 0; 
+  font-size: 1.1rem; 
+}
+
+.pro-modal-actions { 
+  display: flex; 
+  justify-content: flex-end; 
+  gap: 10px; 
+  margin-top: 20px; 
+}
+
+.react-confirm-alert-overlay {
+  background: rgba(0, 0, 0, 0.7) !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999 !important;
+}
+
+.react-confirm-alert {
+  background: #fff;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  width: 90% !important;
+  max-width: 400px !important;
 }

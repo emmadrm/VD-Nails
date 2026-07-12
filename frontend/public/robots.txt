@@ -1,0 +1,2 @@
+User-agent: *
+Disallow: /vd-admin-12xE5
