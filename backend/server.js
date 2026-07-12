@@ -16,17 +16,25 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε ξανά μετά από 15 λεπτά." } });
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Πολλά αιτήματα από αυτή την IP." } });
-const uploadsDir = path.join(__dirname, 'uploads');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer = require('multer');
 
-
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.API_KEY,
+  api_secret: process.env.API_SECRET
 });
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'vd-nails-products',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+  },
+});
+
+const upload = multer({ storage: storage });
 
 const upload = multer({ storage: storage });
 const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:5173'];
@@ -176,11 +184,15 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', upload.single('image'), async (req, res) => {
   const { name, description, price, stock } = req.body;
-  const image_url = req.file ? `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` : null;
+  // Το req.file.path είναι πλέον το μόνιμο URL από το Cloudinary!
+  const image_url = req.file ? req.file.path : null; 
   try {
-    const result = await pool.query('INSERT INTO products (name, description, price, image_url, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *', [name, description, price, image_url, stock || 10]);
+    const result = await pool.query(
+      'INSERT INTO products (name, description, price, image_url, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *', 
+      [name, description, price, image_url, stock || 10]
+    );
     res.json({ message: "Επιτυχία", product: result.rows[0] });
-  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/products/:id', upload.single('image'), async (req, res) => {
@@ -188,7 +200,7 @@ app.put('/api/products/:id', upload.single('image'), async (req, res) => {
   const { name, description, price, stock } = req.body;
   try {
     if (req.file) {
-      const image_url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+      const image_url = req.file.path; // URL από Cloudinary
       await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, image_url=$5 WHERE id=$6', [name, description, price, stock, image_url, id]);
     } else {
       await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4 WHERE id=$5', [name, description, price, stock, id]);
