@@ -7,6 +7,8 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import el from 'date-fns/locale/el'; 
 registerLocale('el', el);
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUB_KEY;
 const stripePromise = loadStripe(stripePublishableKey);
