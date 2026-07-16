@@ -8,6 +8,17 @@ export default function Admin() {
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
+  // Βοηθητική συνάρτηση για την αποφυγή μετατόπισης ημερομηνίας (timezone shift)
+  const formatLocalDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // State για το Καθολικό Modal Επιβεβαίωσης
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
@@ -21,9 +32,9 @@ export default function Admin() {
   // Φίλτρα
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
+  const [orderSearchTerm, setOrderSearchTerm] = useState(''); // Νέο state για αναζήτηση παραγγελιών
 
   // Φόρμες Διαχείρισης
-  // ΠΡΟΣΟΧΗ: Το image_url έγινε imageFile για υποστήριξη ανεβάσματος αρχείου
   const [productForm, setProductForm] = useState({
     id: null, name: '', description: '', price: '', imageFile: null, stock: 10
   });
@@ -160,14 +171,14 @@ export default function Admin() {
       try {
         const res = await fetch(url, {
           method: isEdit ? 'PUT' : 'POST',
-          headers: getAuthHeaders(), // Προσοχή: ΟΧΙ 'Content-Type': 'application/json' όταν στέλνουμε FormData
+          headers: getAuthHeaders(),
           body: formData
         });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success(" Το προϊόν αποθηκεύτηκε επιτυχώς!");
+        toast.success("Το προϊόν αποθηκεύτηκε επιτυχώς!");
         setProductForm({ id: null, name: '', description: '', price: '', imageFile: null, stock: 10 });
         fetchProducts();
-      } catch (err) { toast.error(" Αποτυχία αποθήκευσης προϊόντος."); }
+      } catch (err) { toast.error("Αποτυχία αποθήκευσης προϊόντος."); }
     });
   };
 
@@ -219,12 +230,12 @@ export default function Admin() {
           headers: getJsonHeaders(),
           body: JSON.stringify({
             client_name: editingApt.client_name, client_phone: editingApt.client_phone,
-            client_email: editingApt.client_email, appointment_date: editingApt.appointment_date.slice(0, 10),
+            client_email: editingApt.client_email, appointment_date: formatLocalDate(editingApt.appointment_date),
             appointment_time: editingApt.appointment_time.slice(0, 5), service_name: editingApt.service_name
           })
         });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success(" Το ραντεβού ενημερώθηκε!");
+        toast.success("Το ραντεβού ενημερώθηκε!");
         setEditingApt(null);
         fetchAppointments();
       } catch (err) { toast.error("Σφάλμα ενημέρωσης ραντεβού."); }
@@ -236,7 +247,7 @@ export default function Admin() {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success(" Το ραντεβού ακυρώθηκε.");
+        toast.success("Το ραντεβού ακυρώθηκε.");
         fetchAppointments();
       } catch (err) { toast.error("Σφάλμα κατά την ακύρωση."); }
     });
@@ -257,7 +268,7 @@ export default function Admin() {
         appointment_time: blockForm.time,
         payment_method: "store",
         payment_status: "completed",
-        status: "confirmed", // CRITICAL: Για να μετράει ως 'πιασμένο' ραντεβού
+        status: "confirmed", 
         total_amount: 0,
         duration: parseInt(blockForm.duration) 
       };
@@ -305,40 +316,47 @@ export default function Admin() {
 
   const filteredAppointments = appointments.filter(apt => {
     const matchesSearch = apt.client_name.toLowerCase().includes(searchTerm.toLowerCase()) || apt.service_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDate = dateFilter ? apt.appointment_date.startsWith(dateFilter) : true;
+    const matchesDate = dateFilter ? formatLocalDate(apt.appointment_date) === dateFilter : true;
     return matchesSearch && matchesDate;
   });
 
-  const updateAppointmentStatus = (id, status) => {
-  triggerConfirm("Ολοκλήρωση Ραντεβού", "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/appointments/${id}/status`, { 
-        method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
-      });
-      if (res.ok) {
-        toast.success("Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!");
-        fetchAppointments();
-      }
-    } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = 
+      order.id.toString().includes(orderSearchTerm) || 
+      order.client_name.toLowerCase().includes(orderSearchTerm.toLowerCase());
+    return matchesSearch;
   });
-};
 
-const handleOrderStatusChange = (id, status) => {
-  if (status === 'cancelled') {
-    return toast.error("Η ακύρωση μπορεί να γίνει μόνο από τον πελάτη ή μέσω διαγραφής.");
-  }
-  triggerConfirm("Αλλαγή Κατάστασης", `Θέλετε να αλλάξετε την κατάσταση της παραγγελίας; (Θα προστεθεί στα έσοδα αν επιλέξετε 'Παραλήφθηκε')`, async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/orders/${id}/status`, { 
-        method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
-      });
-      if (res.ok) {
-        toast.success("Η κατάσταση της παραγγελίας ενημερώθηκε!");
-        fetchOrders();
-      }
-    } catch (err) { toast.error("Σφάλμα."); }
-  });
-};
+  const updateAppointmentStatus = (id, status) => {
+    triggerConfirm("Ολοκλήρωση Ραντεβού", "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/appointments/${id}/status`, { 
+          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+        });
+        if (res.ok) {
+          toast.success("Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!");
+          fetchAppointments();
+        }
+      } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
+    });
+  };
+
+  const handleOrderStatusChange = (id, status) => {
+    if (status === 'cancelled') {
+      return toast.error("Η ακύρωση μπορεί να γίνει μόνο από τον πελάτη ή μέσω διαγραφής.");
+    }
+    triggerConfirm("Αλλαγή Κατάστασης", `Θέλετε να αλλάξετε την κατάσταση της παραγγελίας; (Θα προστεθεί στα έσοδα αν επιλέξετε 'Παραλήφθηκε')`, async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/orders/${id}/status`, { 
+          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+        });
+        if (res.ok) {
+          toast.success("Η κατάσταση της παραγγελίας ενημερώθηκε!");
+          fetchOrders();
+        }
+      } catch (err) { toast.error("Σφάλμα."); }
+    });
+  };
 
   return (
     <div className="admin-wrapper" style={{ padding: '30px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
@@ -402,7 +420,7 @@ const handleOrderStatusChange = (id, status) => {
                         </span>
                       </td>
                       <td style={{ padding: '15px', fontWeight: '500' }}>
-                        📅 {apt.appointment_date.slice(0,10)} <span style={{ color: '#dc3545', marginLeft: '5px' }}>⏰ {apt.appointment_time.slice(0,5)}</span>
+                        📅 {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')} <span style={{ color: '#dc3545', marginLeft: '5px' }}>⏰ {apt.appointment_time.slice(0,5)}</span>
                       </td>
                       <td style={{ padding: '15px' }}>
                         <small style={{ 
@@ -444,7 +462,7 @@ const handleOrderStatusChange = (id, status) => {
                <div style={{ display: 'flex', gap: '10px' }}>
                  <div style={{ width: '100%' }}>
                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ημερομηνία</label>
-                   <input type="date" value={editingApt.appointment_date.slice(0,10)} onChange={e => setEditingApt({...editingApt, appointment_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
+                   <input type="date" value={formatLocalDate(editingApt.appointment_date)} onChange={e => setEditingApt({...editingApt, appointment_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
                  </div>
                  <div style={{ width: '100%' }}>
                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ώρα</label>
@@ -497,14 +515,23 @@ const handleOrderStatusChange = (id, status) => {
       </div>
       )}
 
-      {/* TAB 3: ΠΑΡΑΓΓΕΛΙΕΣ (ΜΕ ΕΛΕΓΧΟ STATUS) */}
+      {/* TAB 3: ΠΑΡΑΓΓΕΛΙΕΣ (ΜΕ ΕΛΕΓΧΟ STATUS & ΑΝΑΖΗΤΗΣΗ) */}
       {activeTab === 'orders' && (
         <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-          <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Διαχείριση Παραγγελιών (E-shop)</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+            <h3 style={{ margin: 0, color: '#3b2b1f' }}>Διαχείριση Παραγγελιών (E-shop)</h3>
+            <input 
+              type="text" 
+              placeholder="🔍 Αναζήτηση με κωδικό ή όνομα..." 
+              value={orderSearchTerm} 
+              onChange={e => setOrderSearchTerm(e.target.value)} 
+              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', width: '300px' }} 
+            />
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8f9fa', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                <th style={{ padding: '15px' }}>Πελάτης</th>
+                <th style={{ padding: '15px' }}>Κωδικός / Πελάτης</th>
                 <th style={{ padding: '15px' }}>Προϊόντα</th>
                 <th style={{ padding: '15px' }}>Locker BoxNow</th>
                 <th style={{ padding: '15px', textAlign: 'right' }}>Σύνολο</th>
@@ -512,11 +539,12 @@ const handleOrderStatusChange = (id, status) => {
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => {
+              {filteredOrders.map(order => {
                 const isCancelled = order.status === 'cancelled';
                 return (
                   <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6', background: isCancelled ? '#f8d7da' : 'transparent' }}>
                     <td style={{ padding: '15px' }}>
+                      <span style={{ background: '#e9ecef', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>#{order.id}</span><br />
                       <strong>{order.client_name}</strong><br/>
                       <small style={{ color: '#6c757d' }}>📱 {order.client_phone}</small>
                     </td>
@@ -570,7 +598,6 @@ const handleOrderStatusChange = (id, status) => {
                 <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Απόθεμα</label><input type="number" required value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
               </div>
               
-              {/* ΑΛΛΑΓΗ ΣΕ FILE UPLOAD */}
               <div>
                 <label style={{ fontSize: '0.8rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Φωτογραφία Προϊόντος</label>
                 <input 
@@ -620,7 +647,6 @@ const handleOrderStatusChange = (id, status) => {
         </div>
       )}
 
-      {/* ------------------------------------ */}
       {/* TAB 5: ΔΙΑΧΕΙΡΙΣΗ ΥΠΗΡΕΣΙΩΝ */}
       {activeTab === 'services' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
@@ -696,7 +722,6 @@ const handleOrderStatusChange = (id, status) => {
                 );
               })}
               
-              {/* Αν υπάρχει κάποια υπηρεσία με άλλη/λάθος κατηγορία */}
               {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).length > 0 && (
                 <div>
                   <h4 style={{ color: '#6c757d', borderBottom: '2px solid #f1ece8', paddingBottom: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>Άλλες Υπηρεσίες</h4>
@@ -723,7 +748,6 @@ const handleOrderStatusChange = (id, status) => {
         </div>
       )}
 
-      {/* ------------------------------------ */}
       {/* TAB 6: ΣΤΑΤΙΣΤΙΚΑ (BI) */}
       {activeTab === 'stats' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
@@ -755,7 +779,7 @@ const handleOrderStatusChange = (id, status) => {
 
           {loadingStats ? <p style={{ textAlign: 'center', color: '#6c757d', fontWeight: 'bold' }}>🔄 Υπολογισμός και επεξεργασία δεδομένων BI...</p> : (
             <>
-              {/* ΚΑΡΤΕΣ KPIs (KEY PERFORMANCE INDICATORS) */}
+              {/* ΚΑΡΤΕΣ KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
                 
                 <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderLeft: '5px solid #10b981' }}>

@@ -34,24 +34,48 @@ function App() {
   useEffect(() => {
     localStorage.setItem('vd_nails_cart', JSON.stringify(cart));
   }, [cart]);
+
+  const currentPath = window.location.pathname;
+  
+  const hideCookieModal = currentPath === '/privacy' || currentPath === '/terms' || currentPath === '/cookies';
+  
   return (
     <div>
       <BrowserRouter>
       <Header cart={cart} setCart={setCart}/>
+      
+      {/* ΝΕΟ ΚΕΝΤΡΙΚΟ ΠΑΡΑΘΥΡΟ ΓΙΑ COOKIES */}
+     {!hideCookieModal && (
       <CookieConsent
-          location="bottom"
+          location="none"
+          overlay={true}
           buttonText="Αποδοχή Όλων"
           declineButtonText="Απόρριψη"
           enableDeclineButton
           cookieName="vdnails_gdpr_consent"
-          style={{ background: "#111827", color: "#fff", fontSize: "14px" }}
-          buttonStyle={{ background: "#10b981", color: "#fff", fontSize: "14px", fontWeight: "bold", borderRadius: "6px" }}
-          declineButtonStyle={{ background: "transparent", color: "#e5e7eb", fontSize: "14px", textDecoration: "underline" }}
-          expires={150} // Κρατάει την επιλογή του για 150 μέρες
+          style={{ 
+            background: "#ffffff", 
+            color: "#3b2b1f", 
+            fontSize: "15px", 
+            borderRadius: "12px",
+            maxWidth: "450px",
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+            textAlign: "center",
+            padding: "20px"
+          }}
+          overlayStyle={{ background: "rgba(0,0,0,0.7)" }}
+          declineButtonStyle={{ background: "#f3f4f6", color: "#495057", fontSize: "14px", fontWeight: "bold", borderRadius: "8px", padding: "10px 20px" }}
+          expires={10} 
         >
+          <h3 style={{ margin: "0 0 10px 0", fontSize: "1.3rem", color: "#3b2b1f" }}>🍪 Ρυθμίσεις Cookies</h3>
           Χρησιμοποιούμε cookies για να βελτιώσουμε την εμπειρία σας στο κατάστημά μας. 
-          Μπορείτε να δείτε αναλυτικά την <a href="/privacy-policy" style={{ color: "#10b981" }}>Πολιτική Απορρήτου</a> μας.
+          Μπορείτε να δείτε αναλυτικά την <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", fontWeight: "bold", textDecoration: "none" }}>Πολιτική Απορρήτου</a> μας.
         </CookieConsent>
+      )}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />

@@ -58,6 +58,24 @@ const verifyAdmin = (req, res, next) => {
   });
 };
 
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Δεν παρέχεται token πρόσβασης (Unauthorized)" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET , (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ error: "Μη έγκυρο ή ληγμένο token (Forbidden)" });
+    }
+
+    req.user = decoded;
+    next(); 
+  });
+};
+
 const sendBrevoTemplateEmail = async (toEmail, toName, templateId, params) => {
   try {
     await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -96,20 +114,13 @@ app.post('/api/orders', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Αποτυχία καταχώρησης παραγγελίας" }); }
 });
 
-app.post('/api/appointments/direct', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_method, duration } = req.body;
+app.put('/api/orders/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
   try {
-    let paymentTypeStr = payment_method === 'prepay_success' ? 'Online Πληρωμή (Κάρτα)' : 'Πληρωμή στο Κατάστημα';
-    const result = await pool.query(
-      `INSERT INTO appointments (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', 'confirmed', $10) RETURNING id`,
-      [user_id || null, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, paymentTypeStr, 'completed', 'confirmed', duration || null]
-    );
-    if(client_name !== "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ") {
-      const formattedDateForEmail = appointment_date.split('-').reverse().join('/');
-      sendBrevoTemplateEmail(client_email, client_name, 3, { client_name, appointment_date: formattedDateForEmail, appointment_time, appointment_id: `VD-${result.rows[0].id}`, service_name, service_cost: `${Number(service_price).toFixed(2)}€`, customer_phone: client_phone });
-    }
-    return res.json({ success: true });
-  } catch (err) { return res.status(500).json({ error: "Σφάλμα" }); }
+    await pool.query("UPDATE orders SET status = $1 WHERE id = $2", [status, id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/orders/:id/status', verifyAdmin, async (req, res) => {
@@ -121,20 +132,67 @@ app.put('/api/orders/:id/status', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/appointments/:id/status', verifyAdmin, async (req, res) => {
+app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.post('/api/appointments/direct', async (req, res) => {
+  const { user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_method, duration } = req.body;
+  try {
+    let paymentTypeStr = payment_method === 'prepay_success' ? 'Online Πληρωμή (Κάρτα)' : 'Πληρωμή στο Κατάστημα';
+
+    const query = `
+      INSERT INTO appointments 
+      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+      RETURNING id`;
+
+    const values = [
+      user_id || null, 
+      client_name, 
+      client_email, 
+      client_phone, 
+      service_name, 
+      service_price, 
+      appointment_date, 
+      appointment_time, 
+      paymentTypeStr, 
+      'completed', 
+      'confirmed', 
+      duration || null 
+    ];
+
+    const result = await pool.query(query, values);
+
+    if(client_name !== "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ") {
+      const formattedDateForEmail = appointment_date.split('-').reverse().join('/');
+      sendBrevoTemplateEmail(client_email, client_name, 3, { 
+        client_name, 
+        appointment_date: formattedDateForEmail, 
+        appointment_time, 
+        appointment_id: `VD-${result.rows[0].id}`, 
+        service_name, 
+        service_cost: `${Number(service_price).toFixed(2)}€`, 
+        customer_phone: client_phone 
+      });
+    }
+    return res.json({ success: true });
+  } catch (err) { 
+    console.error("SQL Error:", err); 
+    return res.status(500).json({ error: "Σφάλμα στη βάση δεδομένων" }); 
+  }
+});
+
+app.put('/api/appointments/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   try {
     await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
 app.post('/api/appointments', async (req, res) => {
@@ -155,7 +213,7 @@ app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
-app.put('/api/appointments/:id', verifyAdmin, async (req, res) => {
+app.put('/api/appointments/:id', async (req, res) => {
   const { id } = req.params;
   const { appointment_date, appointment_time } = req.body; 
   try {
@@ -164,7 +222,7 @@ app.put('/api/appointments/:id', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/appointments/:id', verifyAdmin, async (req, res) => {
+app.delete('/api/appointments/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM appointments WHERE id = $1', [id]);
@@ -298,7 +356,6 @@ app.get('/api/admin/stats/sales', verifyAdmin, async (req, res) => {
 app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
-    // 1. Πραγματικά έσοδα (Υπολογίζονται αυστηρά μέσα στο φίλτρο ημερομηνιών)
     const realizedStats = await pool.query(
       `SELECT 
         COUNT(id) as total_appointments, 
@@ -310,7 +367,6 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
       [startDate, endDate]
     );
 
-    // 2. PIPELINE: Κοιτάει ΠΑΝΤΑ από σήμερα και μετά, αγνοώντας το φίλτρο ημερομηνιών!
     const futureStats = await pool.query(
       `SELECT 
         COALESCE(SUM(CAST(service_price AS NUMERIC)), 0) as future_revenue 
@@ -320,7 +376,6 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
          AND client_name != '🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ'`
     );
 
-    // 3. Top Υπηρεσίες (Μέσα στο φίλτρο)
     const topServices = await pool.query(
       `SELECT service_name, COUNT(id) as times_booked, SUM(CAST(service_price AS NUMERIC)) as total_generated_revenue 
        FROM appointments 
@@ -329,7 +384,6 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
       [startDate, endDate]
     );
 
-    // 4. Συχνότεροι Πελάτες (Μέσα στο φίλτρο)
     const frequentClients = await pool.query(
       `SELECT client_name, client_phone, client_email, COUNT(id) as visit_count, SUM(CAST(service_price AS NUMERIC)) as total_value 
        FROM appointments 
@@ -342,7 +396,7 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
       summary: {
         total_appointments: realizedStats.rows[0].total_appointments,
         realized_revenue: realizedStats.rows[0].realized_revenue,
-        future_revenue: futureStats.rows[0].future_revenue // Ενώνουμε το Pipeline εδώ!
+        future_revenue: futureStats.rows[0].future_revenue 
       }, 
       topServices: topServices.rows, 
       frequentClients: frequentClients.rows 

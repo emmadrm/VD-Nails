@@ -27,6 +27,14 @@ export default function Profile() {
     fetchData();
   }, [navigate]);
 
+  // Βοηθητική συνάρτηση για τα Headers με το Token
+  const getAuthHeaders = () => {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('token')}` // Βεβαιώσου ότι το όνομα του token είναι σωστό ('token' ή ό,τι έχεις βάλει στο login)
+    };
+  };
+
   const fetchData = async () => {
     try {
       const res = await fetch(`${API_URL}/api/user/history/${user.id}`);
@@ -43,7 +51,7 @@ export default function Profile() {
     try {
       const res = await fetch(`${API_URL}/api/user/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ email: editUserData.email, phone: editUserData.phone })
       });
       if (res.ok) {
@@ -52,8 +60,14 @@ export default function Profile() {
         window.dispatchEvent(new Event('storage')); // Ενημερώνει το Header
         setUser(updatedUser);
         setIsEditingUser(false);
+        toast.success("Τα στοιχεία σας ενημερώθηκαν!");
+      } else {
+        toast.error("Σφάλμα κατά την αποθήκευση.");
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      toast.error("Σφάλμα επικοινωνίας.");
+      console.error(err); 
+    }
   };
 
   const getHoursDifference = (dateString, timeString) => {
@@ -61,19 +75,30 @@ export default function Profile() {
     return (aptDateTime - new Date()) / (1000 * 60 * 60);
   };
 
- const cancelAppointment = (apt) => {
-  window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
-  setConfirmDialog({
-    isOpen: true,
-    title: 'Ακύρωση Ραντεβού',
-    message: 'Είστε σίγουροι; Η ενέργεια είναι μη αναστρέψιμη.',
-    onConfirm: async () => {
-      await fetch(`${API_URL}/api/appointments/${apt.id}`, { method: 'DELETE' });
-      toast.success("Το ραντεβού ακυρώθηκε!");
-      fetchData();
-    }
-  });
-};
+  const cancelAppointment = (apt) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Ακύρωση Ραντεβού',
+      message: 'Είστε σίγουροι; Η ενέργεια είναι μη αναστρέψιμη.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/appointments/${apt.id}`, { 
+            method: 'DELETE', 
+            headers: getAuthHeaders() // Έλειπε το Token!
+          });
+          if (res.ok) {
+            toast.success("Το ραντεβού ακυρώθηκε επιτυχώς!");
+            fetchData();
+          } else {
+            toast.error("Σφάλμα κατά την ακύρωση του ραντεβού.");
+          }
+        } catch (err) {
+          toast.error("Σφάλμα σύνδεσης με τον server.");
+        }
+      }
+    });
+  };
 
   const openRescheduleModal = (apt) => {
     if (getHoursDifference(apt.appointment_date, apt.appointment_time) < 24) {
@@ -92,7 +117,7 @@ export default function Profile() {
       
       const response = await fetch(`${API_URL}/api/appointments/${rescheduleModal.aptId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(), // Έλειπε το Token!
         body: JSON.stringify({ 
           appointment_date: rescheduleModal.date, 
           appointment_time: rescheduleModal.time 
@@ -105,7 +130,7 @@ export default function Profile() {
         fetchData();
       } else {
         const errData = await response.json();
-        toast.error("Σφάλμα: " + errData.error);
+        toast.error("Σφάλμα: " + (errData.error || "Αποτυχία μετάθεσης."));
       }
     } catch (err) {
       console.error(err);
@@ -115,32 +140,32 @@ export default function Profile() {
     }
   };
 
-const cancelOrder = (orderId) => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  setConfirmDialog({
-    isOpen: true,
-    title: 'Ακύρωση Παραγγελίας',
-    message: 'Είστε σίγουροι ότι θέλετε να ακυρώσετε αυτή την παραγγελία; Η ενέργεια αυτή δεν αναιρείται.',
-    onConfirm: async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/orders/${orderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'cancelled' })
-        });
-        
-        if (res.ok) {
-          toast.success("Η παραγγελία ακυρώθηκε επιτυχώς.");
-          fetchData();
-        } else {
-          toast.error("Δεν ήταν δυνατή η ακύρωση της παραγγελίας.");
+  const cancelOrder = (orderId) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Ακύρωση Παραγγελίας',
+      message: 'Είστε σίγουροι ότι θέλετε να ακυρώσετε αυτή την παραγγελία; Η ενέργεια αυτή δεν αναιρείται.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/orders/${orderId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ status: 'cancelled' })
+          });
+          
+          if (res.ok) {
+            toast.success("Η παραγγελία ακυρώθηκε επιτυχώς.");
+            fetchData();
+          } else {
+            toast.error("Δεν ήταν δυνατή η ακύρωση της παραγγελίας.");
+          }
+        } catch (err) {
+          toast.error("Σφάλμα σύνδεσης με τον server.");
         }
-      } catch (err) {
-        toast.error("Σφάλμα σύνδεσης με τον server.");
       }
-    }
-  });
-};
+    });
+  };
 
   if (!user) return null;
   if (loading) return <div className="pro-loader">Φόρτωση δεδομένων...</div>;
@@ -237,6 +262,8 @@ const cancelOrder = (orderId) => {
           )}
         </div>
       </div>
+
+       <ToastContainer position="top-right" autoClose={3000} style={{zIndex: 999999 }}/>
 
       {/* MODAL ΜΕΤΑΘΕΣΗΣ */}
       {rescheduleModal.isOpen && (
