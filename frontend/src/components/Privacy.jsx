@@ -1,56 +1,58 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 function Privacy() {
+    const { t } = useTranslation();
     return (
-        <div className="container" style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', lineHeight: '1.6', color: '#333' }}>
-      
-      <h1 style={{ color: '#3b2b1f', marginBottom: '10px', textAlign: 'center' }}>Πολιτική Απορρήτου</h1>
-      <p style={{ textAlign: 'center', color: '#666', marginBottom: '40px' }}>
-        <strong>Τελευταία Ενημέρωση: Ιούλιος 2026</strong>
+        <div className="legal-page">
+
+      <h1>{t('legal.privacy.title')}</h1>
+      <p className="legal-page-updated">
+        <strong>{t('legal.lastUpdated')}</strong>
       </p>
 
-      <div style={{ background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-        
-        <p>Στο <strong>VD Nails</strong>, σεβόμαστε απόλυτα τα προσωπικά σας δεδομένα και δεσμευόμαστε να τα προστατεύουμε με βάση τον Γενικό Κανονισμό για την Προστασία Δεδομένων (GDPR) της Ευρωπαϊκής Ένωσης. Η παρούσα πολιτική εξηγεί τι είδους πληροφορίες συλλέγουμε, πώς τις χρησιμοποιούμε και πώς τις προστατεύουμε.</p>
+      <div className="legal-card">
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>1. Ποια δεδομένα συλλέγουμε;</h3>
-        <p>Κατά την εγγραφή σας στο κατάστημά μας, το κλείσιμο ραντεβού ή την ολοκλήρωση μιας παραγγελίας, συλλέγουμε μόνο τα απολύτως απαραίτητα δεδομένα:</p>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.privacy.intro') }} />
+
+        <h3>{t('legal.privacy.s1Title')}</h3>
+        <p>{t('legal.privacy.s1Body')}</p>
         <ul>
-          <li><strong>Στοιχεία Ταυτοποίησης & Επικοινωνίας:</strong> Ονοματεπώνυμο, διεύθυνση email και αριθμό τηλεφώνου.</li>
-          <li><strong>Στοιχεία Αποστολής:</strong> Την προτίμησή σας για θυρίδα παραλαβής (Locker) μέσω του δικτύου της BoxNow ή τη διεύθυνση αποστολής σας.</li>
-          <li><strong>Δεδομένα Λογαριασμού:</strong> Το ιστορικό των παραγγελιών και των ραντεβού σας. Ο κωδικός πρόσβασής σας αποθηκεύεται <strong>αυστηρά κρυπτογραφημένος</strong>.</li>
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s1Li1') }} />
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s1Li2') }} />
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s1Li3') }} />
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>2. Πώς χρησιμοποιούμε τα δεδομένα σας;</h3>
-        <p>Χρησιμοποιούμε τα δεδομένα σας αποκλειστικά για τους παρακάτω σκοπούς:</p>
+        <h3>{t('legal.privacy.s2Title')}</h3>
+        <p>{t('legal.privacy.s2Body')}</p>
         <ul>
-          <li>Για την εκτέλεση και αποστολή της παραγγελίας σας.</li>
-          <li>Για την επιβεβαίωση και διαχείριση των ραντεβού σας.</li>
-          <li>Για να σας στέλνουμε ενημερωτικά email σχετικά με την κατάσταση της παραγγελίας σας.</li>
-          <li>Για τη συμμόρφωσή μας με τις φορολογικές και νομικές μας υποχρεώσεις.</li>
+          <li>{t('legal.privacy.s2Li1')}</li>
+          <li>{t('legal.privacy.s2Li2')}</li>
+          <li>{t('legal.privacy.s2Li3')}</li>
+          <li>{t('legal.privacy.s2Li4')}</li>
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>3. Με ποιους μοιραζόμαστε τα δεδομένα σας;</h3>
-        <p><strong>Δεν πουλάμε και δεν μοιραζόμαστε</strong> τα προσωπικά σας δεδομένα με τρίτους για διαφημιστικούς σκοπούς. Οι συνεργάτες μας είναι:</p>
+        <h3>{t('legal.privacy.s3Title')}</h3>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.privacy.s3Body') }} />
         <ul>
-          <li><strong>BoxNow:</strong> Για την παράδοση του δέματος.</li>
-          <li><strong>Brevo:</strong> Για την αποστολή email επιβεβαίωσης παραγγελιών και ραντεβού.</li>
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s3Li1') }} />
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s3Li2') }} />
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>4. Πώς προστατεύουμε τα δεδομένα σας;</h3>
-        <p>Έχουμε λάβει αυστηρά τεχνικά μέτρα:</p>
+        <h3>{t('legal.privacy.s4Title')}</h3>
+        <p>{t('legal.privacy.s4Body')}</p>
         <ul>
-          <li>Όλη η επικοινωνία κρυπτογραφείται μέσω πιστοποιητικού <strong>SSL (HTTPS)</strong>.</li>
-          <li>Οι κωδικοί πρόσβασης περνούν από διαδικασία ισχυρής κρυπτογράφησης.</li>
-          <li><strong>Τεχνική Παρακολούθηση (Error Tracking):</strong> Χρησιμοποιούμε την υπηρεσία <strong>Sentry</strong> για να εντοπίζουμε και να επιλύουμε τεχνικά σφάλματα της εφαρμογής. Το Sentry συλλέγει ανώνυμα τεχνικά δεδομένα (όπως πληροφορίες συσκευής και browser) αποκλειστικά για σκοπούς βελτίωσης της σταθερότητας της υπηρεσίας και δεν επεξεργάζεται τα προσωπικά σας δεδομένα.</li>
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s4Li1') }} />
+          <li>{t('legal.privacy.s4Li2')}</li>
+          <li dangerouslySetInnerHTML={{ __html: t('legal.privacy.s4Li3') }} />
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>5. Τα Δικαιώματά σας (GDPR)</h3>
-        <p>Έχετε δικαίωμα πρόσβασης, διόρθωσης ή διαγραφής των δεδομένων σας ανά πάσα στιγμή.</p>
+        <h3>{t('legal.privacy.s5Title')}</h3>
+        <p>{t('legal.privacy.s5Body')}</p>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>6. Επικοινωνία</h3>
-        <p>Για οποιοδήποτε αίτημα, επικοινωνήστε μαζί μας στο <strong>info@vdnails.com</strong>.</p>
+        <h3>{t('legal.privacy.s6Title')}</h3>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.privacy.s6Body') }} />
       </div>
     </div>
     );

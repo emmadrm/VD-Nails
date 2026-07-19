@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 export default function Success() {
+  const { t } = useTranslation();
   const location = useLocation();
   // Παίρνουμε την πληροφορία από το state που στείλαμε (από το Checkout ή το Booking)
   const isAppointment = location.state?.isAppointment || false;
@@ -20,31 +22,22 @@ export default function Success() {
         </div>
 
         <h1 className="success-title">
-          {isAppointment ? 'Ευχαριστούμε!' : 'Ευχαριστούμε!'}
+          {t('success.thankYou')}
         </h1>
-        
+
         <p className="success-message">
-          {isAppointment 
-            ? "Η κράτησή σας ολοκληρώθηκε με επιτυχία." 
-            : "Η παραγγελία σας ολοκληρώθηκε με επιτυχία."}
+          {isAppointment ? t('success.appointmentMsg') : t('success.orderMsg')}
         </p>
-        
+
         <div className="success-details">
-          {isAppointment ? (
-            <p>
-              Θα λάβετε σύντομα ένα <strong>email επιβεβαίωσης</strong> με τις λεπτομέρειες του ραντεβού σας και τις οδηγίες για την επίσκεψή σας. Ανυπομονούμε να σας δούμε!
-            </p>
-          ) : (
-            <p>
-              Θα λάβετε σύντομα ένα email επιβεβαίωσης με τις λεπτομέρειες της αποστολής σας μέσω <strong>BoxNow</strong>.
-            </p>
-          )}
+          <p>{isAppointment ? t('success.appointmentDetails') : t('success.orderDetails')}</p>
         </div>
 
         <div className="success-actions">
           <Link to="/" className="success-home-btn">
-            {isAppointment ? "Επιστροφή στην Αρχική" : "Επιστροφή στο Κατάστημα"}
+            {isAppointment ? t('success.backHome') : t('success.backShop')}
           </Link>
+          <Link to="/profile" className="success-secondary-link">{t('success.viewProfile')}</Link>
         </div>
       </div>
     </div>

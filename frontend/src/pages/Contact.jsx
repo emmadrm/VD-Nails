@@ -1,8 +1,10 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 export default function Contact() {
-  const storeAddress = "Pentelis 13, Agia Paraskevi 15343, Greece"; 
+  const { t } = useTranslation();
+  const storeAddress = "Pentelis 13, Agia Paraskevi 15343, Greece";
   const encodedAddress = encodeURIComponent(storeAddress);
   
   const googleMapsLink = `https://maps.google.com/?q=${encodedAddress}`;
@@ -14,8 +16,8 @@ export default function Contact() {
     <div className="booking-wrapper">
       <div className="compact-split-card">
         <div className="compact-content">
-          <h2 className="compact-title">Βρείτε Μας.</h2>
-          <p className="compact-subtitle">Επισκεφθείτε τον χώρο μας και αφεθείτε στα χέρια των ειδικών.</p>
+          <h2 className="compact-title">{t('contact.title')}</h2>
+          <p className="compact-subtitle">{t('contact.subtitle')}</p>
 
           <div className="compact-details">
             <div className="detail-row">
@@ -26,8 +28,8 @@ export default function Contact() {
                 </svg>
               </div>
               <div className="detail-text">
-                <strong>Διεύθυνση</strong>
-                <span>{storeAddress}</span>
+                <strong>{t('contact.address')}</strong>
+                <span>{t('footer.address')}</span>
               </div>
             </div>
 
@@ -38,7 +40,7 @@ export default function Contact() {
                 </svg>
               </div>
               <div className="detail-text">
-                <strong>Τηλέφωνο</strong>
+                <strong>{t('contact.phone')}</strong>
                 <a href="tel:+306909386660" className="interactive-link">690 938 6660</a>
               </div>
             </div>
@@ -51,7 +53,7 @@ export default function Contact() {
                 </svg>
               </div>
               <div className="detail-text">
-                <strong>Email</strong>
+                <strong>{t('contact.email')}</strong>
                 <a href="mailto:vasodrm2@gmail.com" className="interactive-link">vasodrm2@gmail.com</a>
               </div>
             </div>
@@ -65,7 +67,7 @@ export default function Contact() {
                 </svg>
               </div>
               <div className="detail-text">
-                <strong>Instagram</strong>
+                <strong>{t('contact.instagram')}</strong>
                 <a href={instagramLink} target="_blank" rel="noopener noreferrer" className="insta-link">@vdnailsart</a>
               </div>
             </div>
@@ -73,8 +75,8 @@ export default function Contact() {
           </div>
 
           <div className="compact-actions">
-            <a href={googleMapsLink} target="_blank" rel="noopener noreferrer" className="nav-btn-small outline-btn">Google Maps</a>
-            <a href={appleMapsLink} target="_blank" rel="noopener noreferrer" className="nav-btn-small solid-btn">Apple Maps</a>
+            <a href={googleMapsLink} target="_blank" rel="noopener noreferrer" className="nav-btn-small outline-btn">{t('contact.googleMaps')}</a>
+            <a href={appleMapsLink} target="_blank" rel="noopener noreferrer" className="nav-btn-small solid-btn">{t('contact.appleMaps')}</a>
           </div>
         </div>
 

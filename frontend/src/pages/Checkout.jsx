@@ -3,6 +3,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUB_KEY;
 const stripePromise = loadStripe(stripePublishableKey);
@@ -10,6 +11,7 @@ const stripePromise = loadStripe(stripePublishableKey);
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 const PaymentForm = ({ finalTotal, emptyCart, cart, formData, lockerDataRef }) => {
+  const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
@@ -72,7 +74,7 @@ const PaymentForm = ({ finalTotal, emptyCart, cart, formData, lockerDataRef }) =
       }
     } catch (err) {
       console.error(err);
-      setError('Υπήρξε κάποιο πρόβλημα με τη σύνδεση ή την αποθήκευση στη βάση.');
+      setError(t('checkout.errorGeneric'));
     }
     
     setProcessing(false);
@@ -82,7 +84,7 @@ const PaymentForm = ({ finalTotal, emptyCart, cart, formData, lockerDataRef }) =
     <form onSubmit={handleSubmit}>
       <div className="mock-stripe-container">
         <div className="form-group">
-          <label>Στοιχεία Κάρτας</label>
+          <label>{t('checkout.cardDetails')}</label>
           <div className="card-inputs-wrapper" style={{ padding: '15px', width: '100%', backgroundColor: '#ffffff', minHeight: '50px' }}>
             <CardElement options={{ style: { base: { fontSize: '16px', color: '#3b2b1f' } } }} />
           </div>
@@ -94,12 +96,12 @@ const PaymentForm = ({ finalTotal, emptyCart, cart, formData, lockerDataRef }) =
       <div className="terms-checkbox">
         <label>
           <input type="checkbox" required />
-          <span>Έχω διαβάσει και συμφωνώ με τους <a href="/terms" target="_blank">Όρους Χρήσης</a> και την <a href="/privacy" target="_blank">Πολιτική Απορρήτου</a>. *</span>
+          <span>{t('checkout.termsPrefix')} <a href="/terms" target="_blank">{t('footer.terms')}</a> {t('checkout.termsAnd')} <a href="/privacy" target="_blank">{t('footer.privacy')}</a>. *</span>
         </label>
       </div>
 
       <button type="submit" disabled={!stripe || processing} className="pay-now-btn">
-        {processing ? 'Επεξεργασία Πληρωμής...' : `Ολοκλήρωση & Πληρωμή ${finalTotal.toFixed(2)}€`}
+        {processing ? t('checkout.processingPayment') : `${t('checkout.payAndComplete')} ${finalTotal.toFixed(2)}€`}
       </button>
     </form>
   );
@@ -145,6 +147,7 @@ const BoxNowWidget = ({ onLockerSelect }) => {
 };
 
 export default function Checkout({ cart, setCart }) {
+  const { t } = useTranslation();
   const loggedInUser = JSON.parse(localStorage.getItem('vd_user'));
 
   const [step, setStep] = useState(1); 
@@ -177,10 +180,10 @@ export default function Checkout({ cart, setCart }) {
     
     const newErrors = {};
     if (formData.name.trim().split(/\s+/).length < 2) {
-      newErrors.name = 'Παρακαλώ συμπληρώστε πλήρες ονοματεπώνυμο.';
+      newErrors.name = t('checkout.errorName');
     }
     if (!/^\d{10}$/.test(formData.phone)) {
-      newErrors.phone = 'Το τηλέφωνο πρέπει να έχει ακριβώς 10 ψηφία.';
+      newErrors.phone = t('checkout.errorPhone');
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -212,89 +215,89 @@ export default function Checkout({ cart, setCart }) {
   return (
     <div className="checkout-wrapper">
       <div className="checkout-header">
-        <h1>Ταμείο.</h1>
-        <p>Ολοκλήρωση της παραγγελίας σας με ασφάλεια.</p>
+        <h1>{t('checkout.title')}</h1>
+        <p>{t('checkout.subtitle')}</p>
       </div>
 
       <div className="checkout-container">
         <div className="payment-section">
-          
+
          {/* ΒΗΜΑ 1: Στοιχεία */}
           <div className="checkout-block">
-            <h3>1. Στοιχεία Επικοινωνίας</h3>
+            <h3>{t('checkout.step1Title')}</h3>
             <form onSubmit={handleContactSubmit}>
-              
+
               <div className="form-group">
-                <label>Email *</label>
-                <input 
-                  type="email" 
+                <label>{t('checkout.emailLabel')}</label>
+                <input
+                  type="email"
                   name="email"
-                  autoComplete="email" 
-                  placeholder="maria@example.com" 
-                  required 
-                  disabled={step > 1} 
-                  value={formData.email} 
-                  onChange={(e) => setFormData({...formData, email: e.target.value})} 
+                  autoComplete="email"
+                  placeholder="maria@example.com"
+                  required
+                  disabled={step > 1}
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
               </div>
-              
+
               <div className="form-row">
                 <div className="form-group">
-                  <label>Ονοματεπώνυμο *</label>
-                  <input 
-                    type="text" 
+                  <label>{t('checkout.nameLabel')}</label>
+                  <input
+                    type="text"
                     name="name"
-                    autoComplete="name" 
-                    placeholder="Μαρία Παπαδοπούλου" 
-                    required 
-                    disabled={step > 1} 
-                    value={formData.name} 
-                    onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                    autoComplete="name"
+                    placeholder={t('checkout.namePlaceholder')}
+                    required
+                    disabled={step > 1}
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
                   />
                   {contactErrors.name && <p style={{color: '#ef4444', fontSize: '0.85rem', marginTop: '5px', margin: '0'}}>{contactErrors.name}</p>}
                 </div>
-                
+
                 <div className="form-group">
-                  <label>Τηλέφωνο *</label>
-                  <input 
-                    type="tel" 
+                  <label>{t('checkout.phoneLabel')}</label>
+                  <input
+                    type="tel"
                     name="phone"
-                    autoComplete="tel" 
-                    placeholder="69........" 
-                    required 
-                    disabled={step > 1} 
-                    value={formData.phone} 
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})} 
+                    autoComplete="tel"
+                    placeholder="69........"
+                    required
+                    disabled={step > 1}
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
                   {contactErrors.phone && <p style={{color: '#ef4444', fontSize: '0.85rem', marginTop: '5px', margin: '0'}}>{contactErrors.phone}</p>}
                 </div>
               </div>
 
               <div className="form-group">
-                <label>Σχόλια Παραγγελίας</label>
-                <textarea 
-                  value={formData.notes} 
+                <label>{t('checkout.notesLabel')}</label>
+                <textarea
+                  value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
                   disabled={step > 1}
-                  placeholder="Προσθέστε σχόλια εδώ..."
+                  placeholder={t('checkout.notesPlaceholder')}
                   rows="3"
                 />
               </div>
-              
-              {step === 1 && <button type="submit" className="pay-now-btn" style={{ marginTop: '15px' }}>Συνέχεια</button>}
+
+              {step === 1 && <button type="submit" className="pay-now-btn" style={{ marginTop: '15px' }}>{t('checkout.continue')}</button>}
             </form>
           </div>
 
           {/* ΒΗΜΑ 2: Αποστολή BoxNow */}
           {step >= 2 && (
             <div className="checkout-block">
-              <h3>2. Αποστολή (Αποκλειστικά μέσω BoxNow)</h3>
+              <h3>{t('checkout.step2Title')}</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
                 <BoxNowWidget onLockerSelect={handleLockerSelect} />
                 <div className="card card--heigh-auto" id="locker-result" style={{ display: 'none', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
                   <h2 className="h3">Locker : <span id="locker-id">--</span></h2>
                   <p className="blue"><span id="locker-address">--</span>, <span id="locker-zip">--</span></p>
-                  <div style={{ marginTop: '15px', color: '#10b981', fontWeight: '600' }}>✅ Επιλέχθηκε επιτυχώς!</div>
+                  <div style={{ marginTop: '15px', color: '#10b981', fontWeight: '600' }}>✅ {t('checkout.lockerSelected')}</div>
                 </div>
               </div>
             </div>
@@ -303,8 +306,8 @@ export default function Checkout({ cart, setCart }) {
           {/* ΒΗΜΑ 3: Πληρωμή Stripe */}
           {step === 3 && hasSelectedLocker && (
             <div className="checkout-block">
-              <h3>3. Πληρωμή</h3>
-              <p className="stripe-info">Ασφαλής συναλλαγή κρυπτογραφημένη μέσω <strong>Stripe</strong></p>
+              <h3>{t('checkout.step3Title')}</h3>
+              <p className="stripe-info">{t('checkout.stripeInfo')} <strong>Stripe</strong></p>
               <Elements stripe={stripePromise}>
                 <PaymentForm finalTotal={finalTotal} emptyCart={emptyCart} cart={cart} formData={formData} lockerDataRef={lockerDataRef}/>
               </Elements>
@@ -314,7 +317,7 @@ export default function Checkout({ cart, setCart }) {
         </div>
 
         <div className="summary-section">
-          <h3>Σύνοψη Παραγγελίας</h3>
+          <h3>{t('checkout.summaryTitle')}</h3>
           <div className="summary-items-list">
             {cart && cart.map((item, index) => (
               <div key={item.id || index} className="summary-item">
@@ -328,18 +331,18 @@ export default function Checkout({ cart, setCart }) {
           </div>
           <div className="summary-divider"></div>
           <div className="summary-costs">
-            <div className="cost-row"><span>Αξία Καλαθιού</span><span>{cartSubtotal.toFixed(2)}€</span></div>
+            <div className="cost-row"><span>{t('checkout.cartValue')}</span><span>{cartSubtotal.toFixed(2)}€</span></div>
             <div className="cost-row">
-              <span>Μεταφορικά (BoxNow)</span>
+              <span>{t('checkout.shippingCost')}</span>
               {shippingCost === 0 ? (
-                <span style={{ color: '#10b981', fontWeight: 'bold' }}>Δωρεάν</span>
+                <span style={{ color: '#10b981', fontWeight: 'bold' }}>{t('checkout.free')}</span>
               ) : (
                 <span>{shippingCost.toFixed(2)}€</span>
               )}
             </div>
           </div>
           <div className="summary-divider"></div>
-          <div className="summary-total"><span>Τελικό Σύνολο</span><span>{finalTotal.toFixed(2)}€</span></div>
+          <div className="summary-total"><span>{t('checkout.finalTotal')}</span><span>{finalTotal.toFixed(2)}€</span></div>
         </div>
       </div>
     </div>

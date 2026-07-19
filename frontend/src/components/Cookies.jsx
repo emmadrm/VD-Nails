@@ -1,43 +1,45 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 function Cookies() {
+    const { t } = useTranslation();
     return (
-    <div className="container" style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', lineHeight: '1.6', color: '#333' }}>
-      
-      <h1 style={{ color: '#3b2b1f', marginBottom: '10px', textAlign: 'center' }}>Πολιτική Cookies</h1>
-      <p style={{ textAlign: 'center', color: '#666', marginBottom: '40px' }}>
-        <strong>Τελευταία Ενημέρωση: Ιούλιος 2026</strong>
+    <div className="legal-page">
+
+      <h1>{t('legal.cookies.title')}</h1>
+      <p className="legal-page-updated">
+        <strong>{t('legal.lastUpdated')}</strong>
       </p>
 
-      <div style={{ background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-        
-        <p>Καλώς ήρθατε στο ηλεκτρονικό κατάστημα <strong>VD Nails</strong>. Ο σεβασμός της ιδιωτικότητάς σας και η προστασία των προσωπικών σας δεδομένων αποτελούν προτεραιότητα για εμάς. Σε αυτή την πολιτική εξηγούμε τι είναι τα cookies, πώς τα χρησιμοποιούμε και πώς μπορείτε να διαχειριστείτε τις προτιμήσεις σας.</p>
+      <div className="legal-card">
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>1. Τι είναι τα Cookies και το Local Storage;</h3>
-        <p>Τα cookies είναι μικρά αρχεία κειμένου που αποθηκεύονται στον υπολογιστή ή την κινητή συσκευή σας. Στο VD Nails χρησιμοποιούμε cookies και τεχνολογίες αποθήκευσης (όπως το Local Storage) για να κάνουμε την περιήγησή σας ομαλή και να βελτιώνουμε τις υπηρεσίες μας.</p>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.cookies.intro') }} />
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>2. Ποια είδη τεχνολογιών χρησιμοποιούμε;</h3>
-        
-        <h5 style={{ color: '#10b981', marginTop: '20px' }}>Α. Απολύτως Απαραίτητα (Ουσιώδη) - <em>Ενεργά από προεπιλογή</em></h5>
-        <p>Αυτά τα δεδομένα είναι απαραίτητα για την ορθή λειτουργία του ιστότοπου και δεν απαιτούν συγκατάθεση.</p>
+        <h3>{t('legal.cookies.s1Title')}</h3>
+        <p>{t('legal.cookies.s1Body')}</p>
+
+        <h3>{t('legal.cookies.s2Title')}</h3>
+
+        <h5 style={{ color: '#10b981', marginTop: '20px' }}>{t('legal.cookies.s2ATitle')} - <em>{t('legal.cookies.s2AState')}</em></h5>
+        <p>{t('legal.cookies.s2ABody')}</p>
         <ul>
-          <li style={{ marginBottom: '8px' }}><strong>Καλάθι Αγορών:</strong> Το Local Storage θυμάται τα προϊόντα σας.</li>
-          <li style={{ marginBottom: '8px' }}><strong>Σύνδεση/Ασφάλεια:</strong> Ασφαλή κλειδιά (Tokens) για τη διατήρηση της σύνδεσής σας.</li>
-          <li style={{ marginBottom: '8px' }}><strong>Τεχνική Παρακολούθηση (Sentry):</strong> Χρησιμοποιούμε την υπηρεσία Sentry για τον εντοπισμό τεχνικών σφαλμάτων. Τα cookies που ορίζονται από το Sentry είναι απαραίτητα για τη διασφάλιση της τεχνικής ορθότητας της εφαρμογής και τη σταθερότητα των υπηρεσιών μας.</li>
+          <li style={{ marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('legal.cookies.s2ALi1') }} />
+          <li style={{ marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('legal.cookies.s2ALi2') }} />
+          <li style={{ marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('legal.cookies.s2ALi3') }} />
         </ul>
 
-        <h5 style={{ color: '#10b981', marginTop: '20px' }}>Β. Cookies Στατιστικών και Ανάλυσης (Analytics) - <em>Απαιτούν συγκατάθεση</em></h5>
-        <p>Εφόσον μας δώσετε τη συγκατάθεσή σας, χρησιμοποιούμε εργαλεία όπως το Google Analytics για να κατανοήσουμε πώς χρησιμοποιείτε τον ιστότοπό μας και να τον βελτιώσουμε.</p>
+        <h5 style={{ color: '#10b981', marginTop: '20px' }}>{t('legal.cookies.s2BTitle')} - <em>{t('legal.cookies.s2BState')}</em></h5>
+        <p>{t('legal.cookies.s2BBody')}</p>
 
-        <h5 style={{ color: '#10b981', marginTop: '20px' }}>Γ. Cookies Εμπορικής Προώθησης (Marketing) - <em>Απαιτούν συγκατάθεση</em></h5>
-        <p>Αυτά τα cookies ενδέχεται να οριστούν από διαφημιστικούς συνεργάτες (π.χ. Facebook, TikTok) για να σας δείχνουμε σχετικές διαφημίσεις μας σε άλλους ιστότοπους.</p>
+        <h5 style={{ color: '#10b981', marginTop: '20px' }}>{t('legal.cookies.s2CTitle')} - <em>{t('legal.cookies.s2CState')}</em></h5>
+        <p>{t('legal.cookies.s2CBody')}</p>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>3. Διαχείριση Προτιμήσεων</h3>
-        <p>Μπορείτε να διαχειριστείτε τις προτιμήσεις σας μέσω του Cookie Banner στην ιστοσελίδα μας ή μέσω των ρυθμίσεων του περιηγητή σας (Chrome, Safari, Firefox κλπ.).</p>
-        
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>4. Επικοινωνία</h3>
-        <p>Για απορίες, επικοινωνήστε στο <strong>info@vdnails.com</strong>.</p>
+        <h3>{t('legal.cookies.s3Title')}</h3>
+        <p>{t('legal.cookies.s3Body')}</p>
+
+        <h3>{t('legal.cookies.s4Title')}</h3>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.cookies.s4Body') }} />
       </div>
     </div>
     );

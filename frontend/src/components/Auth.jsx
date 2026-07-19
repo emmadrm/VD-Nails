@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 export default function Auth() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true); // Εναλλαγή μεταξύ Σύνδεσης & Εγγραφής
+  const location = useLocation();
+  const [isLogin, setIsLogin] = useState(location.state?.mode !== 'register'); // Εναλλαγή μεταξύ Σύνδεσης & Εγγραφής
   const [error, setError] = useState(null);
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
@@ -32,55 +35,58 @@ export default function Auth() {
       const data = await res.json();
 
       if (res.ok) {
-        // Επιτυχία: Αποθηκεύουμε τον χρήστη και τον πάμε στο προφίλ του!
+        // Επιτυχία: Αποθηκεύουμε τον χρήστη και τον πάμε εκεί που ήθελε αρχικά (ή στο προφίλ του)
         localStorage.setItem('vd_user', JSON.stringify(data.user));
-        navigate('/profile');
+        navigate(location.state?.from || '/profile');
         window.location.reload(); // Ανανέωση για να ενημερωθεί το Header
       } else {
         // Σφάλμα (π.χ. λάθος κωδικός ή το email υπάρχει ήδη)
         setError(data.error);
       }
     } catch (err) {
-      setError('Υπήρξε κάποιο πρόβλημα με τον server. Προσπαθήστε ξανά.');
+      setError(t('auth.errorGeneric'));
     }
   };
 
   return (
-    <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-      <div className="card shadow-sm" style={{ width: '100%', maxWidth: '400px', padding: '30px', borderRadius: '15px', border: 'none' }}>
-        <h2 className="text-center mb-4" style={{ color: '#3b2b1f' }}>
-          {isLogin ? 'Σύνδεση' : 'Δημιουργία Λογαριασμού'}
+    <div className="auth-wrapper">
+      <div className="auth-card">
+        <div className="auth-icon-badge">
+          <img src="/logo.png" alt="VD Nails" />
+        </div>
+
+        <div className="auth-tabs">
+          <button type="button" className={`auth-tab-btn${isLogin ? ' active' : ''}`} onClick={() => { setIsLogin(true); setError(null); }}>
+            {t('auth.login')}
+          </button>
+          <button type="button" className={`auth-tab-btn${!isLogin ? ' active' : ''}`} onClick={() => { setIsLogin(false); setError(null); }}>
+            {t('auth.register')}
+          </button>
+        </div>
+
+        <h2 className="text-center mb-4" style={{ color: '#3b2b1f', fontFamily: "'Instrument Serif', serif", fontSize: '2rem' }}>
+          {isLogin ? t('auth.welcome') : t('auth.createAccount')}
         </h2>
 
         {error && <div className="alert alert-danger p-2 text-center" style={{ fontSize: '0.9rem' }}>{error}</div>}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          
+
           {!isLogin && (
             <>
-              <input type="text" name="name" className="form-control" placeholder="Ονοματεπώνυμο *" required value={formData.name} onChange={handleChange} />
-              <input type="tel" name="phone" className="form-control" placeholder="Τηλέφωνο *" required value={formData.phone} onChange={handleChange} />
+              <input type="text" name="name" className="form-control vd-input" placeholder={t('auth.namePlaceholder')} required value={formData.name} onChange={handleChange} />
+              <input type="tel" name="phone" className="form-control vd-input" placeholder={t('auth.phonePlaceholder')} required value={formData.phone} onChange={handleChange} />
             </>
           )}
-          
-          <input type="email" name="email" className="form-control" placeholder="Email *" required value={formData.email} onChange={handleChange} />
-          
-          <input type="password" name="password" className="form-control" placeholder="Κωδικός *" required value={formData.password} onChange={handleChange} />
 
-          <button type="submit" className="btn w-100 fw-bold mt-2" style={{ backgroundColor: '#3b2b1f', color: '#fff' }}>
-            {isLogin ? 'Σύνδεση' : 'Εγγραφή'}
+          <input type="email" name="email" className="form-control vd-input" placeholder={t('auth.emailPlaceholder')} required value={formData.email} onChange={handleChange} />
+
+          <input type="password" name="password" className="form-control vd-input" placeholder={t('auth.passwordPlaceholder')} required value={formData.password} onChange={handleChange} />
+
+          <button type="submit" className="pay-now-btn" style={{ marginTop: '5px' }}>
+            {isLogin ? t('auth.login') : t('auth.register')}
           </button>
         </form>
-
-        <div className="text-center mt-4" style={{ fontSize: '0.9rem' }}>
-          {isLogin ? 'Δεν έχετε λογαριασμό; ' : 'Έχετε ήδη λογαριασμό; '}
-          <span 
-            onClick={() => { setIsLogin(!isLogin); setError(null); }} 
-            style={{ color: '#8c7a6b', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
-          >
-            {isLogin ? 'Εγγραφείτε εδώ' : 'Συνδεθείτε εδώ'}
-          </span>
-        </div>
       </div>
     </div>
   );

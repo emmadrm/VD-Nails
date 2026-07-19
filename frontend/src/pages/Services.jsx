@@ -1,14 +1,21 @@
 import React from 'react';
 import '../index.css';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 function Services() {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="container px-4 py-5" id="featured-3">
+        <div className="services-page-header">
+          <p className="home-hero-eyebrow">{t('services.eyebrow')}</p>
+          <h1 className="services-page-title">{t('services.title')}</h1>
+          <p className="services-page-subtitle">{t('services.subtitle')}</p>
+        </div>
         <div className="row g-4 py-5 row-cols-1 row-cols-lg-3">
-          <div className="feature col">
-            <div className="d-flex align-items-center justify-content-left mb-3 mx-2">
+          <Link to="/services/Χέρια" className="feature col service-feature-card service-tile-link">
+            <div className="d-flex align-items-center justify-content-left mb-3 mx-2 service-icon-wrap">
             <svg viewBox="224.4106 183.989 37.4025 40.4673" width="70" height="70">
               <g transform="matrix(4.908718109130859, 0, 0, 5.326013088226318, 222.33174133300778, 181.6761474609375)" id="object-0">
                <path 
@@ -19,12 +26,12 @@ function Services() {
               </g>
             </svg>
           </div>
-            <h3 className="fs-2 text-black mx-2">Περιποίηση Χεριών</h3>
-            <p className="text-black">Λεπτομέρειες για την υπηρεσία περιποίησης χεριών.</p>
-            <Link to="/services/Χέρια" className="icon-link text-decoration-none text-white">Περισσότερα</Link>
-          </div>
-          <div className="feature col">
-            <div className="d-flex align-items-center justify-content-left mb-3">
+            <h3 className="fs-2 text-black mx-2 service-title">{t('services.handsTitle')}</h3>
+            <p className="text-black service-desc">{t('services.handsDesc')}</p>
+            <span className="service-tile-cta">{t('services.cta')} <span className="service-tile-arrow">→</span></span>
+          </Link>
+          <Link to="/services/Πόδια" state={{ category: 'Πόδια' }} className="feature col service-feature-card service-tile-link">
+            <div className="d-flex align-items-center justify-content-left mb-3 service-icon-wrap">
             <svg viewBox="207.9632 171.1799 88.6315 71.2691" width="65" height="65">
               <path 
                 fill="#232020" 
@@ -33,12 +40,12 @@ function Services() {
               />
             </svg>
             </div>
-            <h3 className="fs-2 text-black">Περιποίηση Ποδιών</h3>
-            <p className="text-black">Λεπτομέρειες για την υπηρεσία περιποίησης ποδιών.</p>
-            <Link to="/services/Πόδια" state={{ category: 'Πόδια' }} className="icon-link text-decoration-none text-white">Περισσότερα</Link>
-          </div>
-          <div className="feature col">
-            <div className="d-flex align-items-center justify-content-left mb-3">
+            <h3 className="fs-2 text-black service-title">{t('services.feetTitle')}</h3>
+            <p className="text-black service-desc">{t('services.feetDesc')}</p>
+            <span className="service-tile-cta">{t('services.cta')} <span className="service-tile-arrow">→</span></span>
+          </Link>
+          <Link to="/services/Πρόσωπο" state={{ category: 'Πρόσωπο' }} className="feature col service-feature-card service-tile-link">
+            <div className="d-flex align-items-center justify-content-left mb-3 service-icon-wrap">
             <svg viewBox="177.5482 184.9203 20.6328 22.0861" width="70" height="70">
               <g transform="matrix(2.7079060077667236, 0, 0, 3.011754035949707, 176.40135192871094, 183.2135467529297)" id="object-0">
                 <path 
@@ -49,10 +56,10 @@ function Services() {
               </g>
             </svg>
             </div>
-            <h3 className="fs-2 text-black">Περιποίηση Προσώπου</h3>
-            <p className="text-black">Λεπτομέρειες για την υπηρεσία περιποίησης προσώπου.</p>
-            <Link to="/services/Πρόσωπο" state={{ category: 'Πρόσωπο' }} className=" icon-link text-decoration-none text-white">Περισσότερα</Link>
-          </div>
+            <h3 className="fs-2 text-black service-title">{t('services.faceTitle')}</h3>
+            <p className="text-black service-desc">{t('services.faceDesc')}</p>
+            <span className="service-tile-cta">{t('services.cta')} <span className="service-tile-arrow">→</span></span>
+          </Link>
         </div>
       </div>
     </div>

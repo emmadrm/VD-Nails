@@ -1,52 +1,54 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import '../index.css';
 
 function Terms() {
+    const { t } = useTranslation();
     return (
-        <div className="container" style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px', lineHeight: '1.6', color: '#333' }}>
-      
-      <h1 style={{ color: '#3b2b1f', marginBottom: '10px', textAlign: 'center' }}>Όροι Χρήσης</h1>
-      <p style={{ textAlign: 'center', color: '#666', marginBottom: '40px' }}>
-        <strong>Τελευταία Ενημέρωση: Ιούλιος 2026</strong>
+        <div className="legal-page">
+
+      <h1>{t('legal.terms.title')}</h1>
+      <p className="legal-page-updated">
+        <strong>{t('legal.lastUpdated')}</strong>
       </p>
 
-      <div style={{ background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-        
-        <p>Καλώς ήρθατε στο <strong>VD Nails</strong>. Η χρήση του ηλεκτρονικού μας καταστήματος και των υπηρεσιών μας προϋποθέτει την ανεπιφύλακτη αποδοχή των παρακάτω όρων. Παρακαλούμε διαβάστε τους προσεκτικά πριν προχωρήσετε σε οποιαδήποτε συναλλαγή.</p>
+      <div className="legal-card">
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>1. Γενικές Πληροφορίες</h3>
-        <p>Ο ιστότοπος αποτελεί το επίσημο ηλεκτρονικό κατάστημα της επιχείρησης VD Nails. Διατηρούμε το δικαίωμα να τροποποιούμε ελεύθερα, να αναθεωρούμε ή να καταργούμε τους παρόντες όρους χρήσης και τις προϋποθέσεις των συναλλαγών οποτεδήποτε κρίνεται αναγκαίο, αναλαμβάνοντας την υποχρέωση να ενημερώνουμε τους καταναλωτές για οποιαδήποτε αλλαγή μέσα από τις σελίδες του παρόντος ηλεκτρονικού καταστήματος.</p>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.terms.intro') }} />
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>2. Παρεχόμενες Πληροφορίες & Προϊόντα</h3>
-        <p>Δεσμευόμαστε ως προς την εγκυρότητα και την πληρότητα των πληροφοριών που παρατίθενται στο ηλεκτρονικό μας κατάστημα, όσον αφορά την ταυτότητα της επιχείρησης, καθώς και τα χαρακτηριστικά των παρεχόμενων προϊόντων. Ωστόσο:</p>
+        <h3>{t('legal.terms.s1Title')}</h3>
+        <p>{t('legal.terms.s1Body')}</p>
+
+        <h3>{t('legal.terms.s2Title')}</h3>
+        <p>{t('legal.terms.s2Body')}</p>
         <ul>
-          <li style={{ marginBottom: '8px' }}>Ενδέχεται να υπάρχουν μικρές αποκλίσεις στα χρώματα των βερνικιών/προϊόντων, καθώς η απεικόνισή τους εξαρτάται από την ανάλυση και τις ρυθμίσεις της οθόνης του εκάστοτε χρήστη.</li>
-          <li style={{ marginBottom: '8px' }}>Διατηρούμε το δικαίωμα αλλαγής των τιμών χωρίς προηγούμενη προειδοποίηση. Οι πελάτες χρεώνονται πάντα την τιμή που ίσχυε τη στιγμή της τοποθέτησης της παραγγελίας τους.</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s2Li1')}</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s2Li2')}</li>
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>3. Εγγραφή & Ασφάλεια Λογαριασμού</h3>
-        <p>Για την πραγματοποίηση αγορών ή το κλείσιμο ραντεβού, ο χρήστης μπορεί να δημιουργήσει έναν προσωπικό λογαριασμό. Ο χρήστης είναι αποκλειστικά υπεύθυνος για:</p>
+        <h3>{t('legal.terms.s3Title')}</h3>
+        <p>{t('legal.terms.s3Body')}</p>
         <ul>
-          <li style={{ marginBottom: '8px' }}>Τη διατήρηση της μυστικότητας του κωδικού πρόσβασής του.</li>
-          <li style={{ marginBottom: '8px' }}>Την ακρίβεια και την αλήθεια των στοιχείων που δηλώνει (όνομα, τηλέφωνο, email). Το VD Nails δεν φέρει καμία ευθύνη για αδυναμία επικοινωνίας ή παράδοσης λόγω λανθασμένων στοιχείων.</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s3Li1')}</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s3Li2')}</li>
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>4. Διαθεσιμότητα & Παραγγελίες</h3>
-        <p>Η καταχώρηση μιας παραγγελίας δεν συνεπάγεται αυτόματη δέσμευση των αποθεμάτων. Σε περίπτωση που κάποιο προϊόν εμφανίζεται διαθέσιμο αλλά έχει εξαντληθεί λόγω ταυτόχρονων αγορών:</p>
+        <h3>{t('legal.terms.s4Title')}</h3>
+        <p>{t('legal.terms.s4Body')}</p>
         <ul>
-          <li style={{ marginBottom: '8px' }}>Το VD Nails αναλαμβάνει να ενημερώσει άμεσα τον πελάτη (τηλεφωνικά ή μέσω email).</li>
-          <li style={{ marginBottom: '8px' }}>Ο πελάτης έχει το δικαίωμα είτε να ακυρώσει την παραγγελία με πλήρη επιστροφή χρημάτων, είτε να αντικαταστήσει το προϊόν, είτε να αναμείνει την παραλαβή νέου αποθέματος.</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s4Li1')}</li>
+          <li style={{ marginBottom: '8px' }}>{t('legal.terms.s4Li2')}</li>
         </ul>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>5. Πνευματική Ιδιοκτησία</h3>
-        <p>Όλο το περιεχόμενο του ηλεκτρονικού καταστήματος, συμπεριλαμβανομένων (ενδεικτικά και όχι περιοριστικά) του λογοτύπου <strong>VD Nails</strong>, των εικόνων, των φωτογραφιών, των γραφικών και των κειμένων, αποτελεί πνευματική ιδιοκτησία της επιχείρησης και προστατεύεται από τις σχετικές διατάξεις του ελληνικού και ευρωπαϊκού δικαίου. Απαγορεύεται οποιαδήποτε αντιγραφή, αναπαραγωγή ή μεταπώληση του περιεχομένου χωρίς την προηγούμενη έγγραφη άδεια μας.</p>
+        <h3>{t('legal.terms.s5Title')}</h3>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.terms.s5Body') }} />
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>6. Περιορισμός Ευθύνης</h3>
-        <p>Το VD Nails δεν φέρει ευθύνη για τυχόν τεχνικά προβλήματα που μπορεί να παρουσιαστούν στους χρήστες κατά την πρόσβασή τους στον ιστότοπο, τα οποία σχετίζονται με τη συμβατότητα της δικής τους υποδομής (π.χ. παλιός browser, ιοί). Επίσης, τα προϊόντα περιποίησης προορίζονται για εξωτερική/επαγγελματική χρήση. Διαβάστε προσεκτικά τα συστατικά πριν τη χρήση για τυχόν αλλεργίες. Η εταιρεία δεν ευθύνεται για τυχόν αλλεργικές αντιδράσεις από εσφαλμένη χρήση.</p>
+        <h3>{t('legal.terms.s6Title')}</h3>
+        <p>{t('legal.terms.s6Body')}</p>
 
-        <h3 style={{ color: '#3b2b1f', marginTop: '30px', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>7. Επικοινωνία</h3>
-        <p>Για οποιαδήποτε διευκρίνιση σχετικά με τους παρόντες όρους, παρακαλούμε επικοινωνήστε μαζί μας στο <strong>info@vdnails.com</strong>.</p>
-        
+        <h3>{t('legal.terms.s7Title')}</h3>
+        <p dangerouslySetInnerHTML={{ __html: t('legal.terms.s7Body') }} />
+
       </div>
     </div>
     );

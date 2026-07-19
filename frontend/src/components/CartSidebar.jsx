@@ -1,8 +1,10 @@
 import React from 'react';
 import { Link } from "react-router-dom";
+import { useTranslation } from 'react-i18next';
 
 function CartSidebar({ isOpen, setIsOpen, cart, setCart }) {
-  
+  const { t } = useTranslation();
+
   const updateCartQuantity = (id, delta) => {
     setCart(prevCart => 
       prevCart.map(item => 
@@ -18,7 +20,7 @@ function CartSidebar({ isOpen, setIsOpen, cart, setCart }) {
       <div className={`cart-sidebar ${isOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
         
         <div className="cart-header">
-          <h2>Το Καλάθι σας</h2>
+          <h2>{t('cart.title')}</h2>
           <button onClick={() => setIsOpen(false)} className="close-cart-btn">&times;</button>
         </div>
 
@@ -42,18 +44,18 @@ function CartSidebar({ isOpen, setIsOpen, cart, setCart }) {
               </div>
             ))
           ) : (
-            <div className="empty-cart-msg">Το καλάθι σας είναι άδειο.</div>
+            <div className="empty-cart-msg">{t('cart.empty')}</div>
           )}
         </div>
 
         <div className="cart-footer">
           <div className="cart-total">
-            <span>Σύνολο:</span>
+            <span>{t('cart.total')}</span>
             <span>{cartSubtotal.toFixed(2)}€</span>
           </div>
           <Link to="/checkout" onClick={() => setIsOpen(false)} style={{ textDecoration: 'none' }}>
             <button className="checkout-btn" disabled={!cart || cart.length === 0} style={{ opacity: cart?.length > 0 ? 1 : 0.5 }}>
-              Μετάβαση στο Ταμείο
+              {t('cart.checkout')}
             </button>
           </Link>
         </div>

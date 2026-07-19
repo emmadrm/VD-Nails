@@ -237,14 +237,21 @@ app.get('/api/products', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
+app.get('/api/products/categories', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT DISTINCT category FROM products ORDER BY category');
+    res.json(result.rows.map(r => r.category));
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
 app.post('/api/products', upload.single('image'), async (req, res) => {
-  const { name, description, price, stock } = req.body;
+  const { name, description, price, stock, category } = req.body;
   // Το req.file.path είναι πλέον το μόνιμο URL από το Cloudinary!
-  const image_url = req.file ? req.file.path : null; 
+  const image_url = req.file ? req.file.path : null;
   try {
     const result = await pool.query(
-      'INSERT INTO products (name, description, price, image_url, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *', 
-      [name, description, price, image_url, stock || 10]
+      'INSERT INTO products (name, description, price, image_url, stock, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [name, description, price, image_url, stock || 10, category || 'Γενικά']
     );
     res.json({ message: "Επιτυχία", product: result.rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -252,13 +259,13 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
 
 app.put('/api/products/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
-  const { name, description, price, stock } = req.body;
+  const { name, description, price, stock, category } = req.body;
   try {
     if (req.file) {
       const image_url = req.file.path; // URL από Cloudinary
-      await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, image_url=$5 WHERE id=$6', [name, description, price, stock, image_url, id]);
+      await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, image_url=$5, category=$6 WHERE id=$7', [name, description, price, stock, image_url, category || 'Γενικά', id]);
     } else {
-      await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4 WHERE id=$5', [name, description, price, stock, id]);
+      await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, category=$5 WHERE id=$6', [name, description, price, stock, category || 'Γενικά', id]);
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -341,6 +348,30 @@ app.put('/api/user/:id', async (req, res) => {
     await pool.query('UPDATE users SET email=$1, phone=$2 WHERE id=$3', [email, phone, id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.email, u.phone, u.created_at,
+        COUNT(DISTINCT a.id) as appointment_count,
+        COUNT(DISTINCT o.id) as order_count
+      FROM users u
+      LEFT JOIN appointments a ON a.user_id = u.id
+      LEFT JOIN orders o ON o.user_id = u.id
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.get('/api/admin/users/:id/history', verifyAdmin, async (req, res) => {
+  try {
+    const apts = await pool.query("SELECT * FROM appointments WHERE user_id = $1 ORDER BY appointment_date DESC, appointment_time DESC", [req.params.id]);
+    const ords = await pool.query("SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC", [req.params.id]);
+    res.json({ appointments: apts.rows, orders: ords.rows });
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
 app.get('/api/admin/stats/sales', verifyAdmin, async (req, res) => {

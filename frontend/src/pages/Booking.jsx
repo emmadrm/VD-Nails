@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css'; 
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import DatePicker, { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import el from 'date-fns/locale/el'; 
+import el from 'date-fns/locale/el';
 registerLocale('el', el);
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useTranslation } from 'react-i18next';
 
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUB_KEY;
 const stripePromise = loadStripe(stripePublishableKey);
@@ -28,6 +29,7 @@ const minutesToTime = (totalMinutes) => {
 
 // --- ΦΟΡΜΑ ΠΛΗΡΩΜΗΣ STRIPE ---
 const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmitting }) => {
+  const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
@@ -81,12 +83,12 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
         if (saveRes.ok) {
           navigate('/success', { state: { isAppointment: true } });
         } else {
-          setStripeError('Υπήρξε πρόβλημα με την καταχώρηση. Επικοινωνήστε μαζί μας.');
+          setStripeError(t('booking.errorRegistration'));
         }
       }
     } catch (err) {
       console.error(err);
-      setStripeError('Σφάλμα επικοινωνίας με την τράπεζα.');
+      setStripeError(t('booking.errorBank'));
     } finally {
       setIsSubmitting(false); 
     }
@@ -94,15 +96,15 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
 
   return (
     <div style={{ marginTop: '20px', background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-      <h5 style={{ color: '#3b2b1f', marginBottom: '15px' }}>Στοιχεία Κάρτας (Stripe)</h5>
+      <h5 style={{ color: '#3b2b1f', marginBottom: '15px' }}>{t('booking.cardDetails')}</h5>
       <div className="card-inputs-wrapper" style={{ padding: '15px', width: '100%', backgroundColor: '#ffffff', minHeight: '50px', borderRadius: '6px', border: '1px solid #d1d5db' }}>
         <CardElement options={{ style: { base: { fontSize: '16px', color: '#3b2b1f' } } }} />
       </div>
       
       {stripeError && <div style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.9rem', fontWeight: 'bold' }}>{stripeError}</div>}
       
-      <button type="button" onClick={handleStripeSubmit} disabled={!stripe || isSubmitting} className="btn w-100 fw-bold mt-3" style={{ backgroundColor: '#10b981', color: '#fff', padding: '12px' }}>
-        {isSubmitting ? 'Επεξεργασία Πληρωμής...' : `Πληρωμή & Ολοκλήρωση ${Number(totalAmount).toFixed(2)}€`}
+      <button type="button" onClick={handleStripeSubmit} disabled={!stripe || isSubmitting} className="pay-now-btn" style={{ marginTop: '15px' }}>
+        {isSubmitting ? t('booking.processingPayment') : `${t('booking.payAndComplete')} ${Number(totalAmount).toFixed(2)}€`}
       </button>
     </div>
   );
@@ -110,11 +112,12 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
 
 // --- ΚΕΝΤΡΙΚΟ COMPONENT ---
 export default function Booking() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   
   const { serviceName } = location.state || {};
-  const activeCategory = location.state?.category || 'Χέρια';
+  const stateCategory = location.state?.category;
   
   const [dbServices, setDbServices] = useState([]);
   const [availableTimes, setAvailableTimes] = useState([]);
@@ -123,6 +126,7 @@ export default function Booking() {
   const [showStripeForm, setShowStripeForm] = useState(false);
 
   const storedUser = JSON.parse(localStorage.getItem('vd_user') || '{}');
+  const isLoggedIn = !!storedUser.id;
 
   const [clientData, setClientData] = useState({
     name: storedUser.name || '',
@@ -148,14 +152,14 @@ export default function Booking() {
         if (serviceName) {
             const found = data.find(s => s.name === serviceName);
             if (found) initialId = found.id.toString();
-        } else {
-            const categoryServices = data.filter(s => s.category === activeCategory);
+        } else if (stateCategory) {
+            const categoryServices = data.filter(s => s.category === stateCategory);
             if (categoryServices.length > 0) initialId = categoryServices[0].id.toString();
         }
         setFormData(prev => ({ ...prev, serviceId: initialId }));
       })
       .catch(err => console.error(err));
-  }, [activeCategory, serviceName]);
+  }, [stateCategory, serviceName]);
 
   useEffect(() => {
     if (!formData.date || !formData.serviceId || dbServices.length === 0) return;
@@ -213,7 +217,17 @@ export default function Booking() {
       });
   }, [formData.date, formData.serviceId, dbServices]);
 
-  const availableServices = dbServices.filter(s => s.category === activeCategory);
+  const availableServices = stateCategory
+    ? dbServices.filter(s => s.category === stateCategory)
+    : dbServices;
+
+  const groupedServices = !stateCategory
+    ? availableServices.reduce((acc, srv) => {
+        (acc[srv.category] = acc[srv.category] || []).push(srv);
+        return acc;
+      }, {})
+    : null;
+
   const selectedServiceObj = dbServices.find(s => s.id.toString() === formData.serviceId);
 
   const handleClientChange = (e) => {
@@ -247,9 +261,9 @@ export default function Booking() {
     e.preventDefault();
     
     const newErrors = {};
-    if (!formData.time) newErrors.time = 'Παρακαλώ επιλέξτε ώρα.';
-    if (clientData.name.trim().split(/\s+/).length < 2) newErrors.name = 'Συμπληρώστε πλήρες ονοματεπώνυμο.';
-    if (!/^\d{10}$/.test(clientData.phone)) newErrors.phone = 'Το τηλέφωνο πρέπει να έχει 10 ψηφία.';
+    if (!formData.time) newErrors.time = t('booking.errorTime');
+    if (clientData.name.trim().split(/\s+/).length < 2) newErrors.name = t('booking.errorName');
+    if (!/^\d{10}$/.test(clientData.phone)) newErrors.phone = t('booking.errorPhone');
 
     if (Object.keys(newErrors).length > 0) {
         setErrors(newErrors);
@@ -275,62 +289,98 @@ export default function Booking() {
         navigate('/success', { state: { isAppointment: true } });
       } else {
         const data = await res.json();
-        toast.error(data.error || "Υπήρξε πρόβλημα με την κράτηση.");
+        toast.error(data.error || t('booking.errorGeneric'));
       }
     } catch (err) {
-      toast.error("Σφάλμα σύνδεσης.");
+      toast.error(t('booking.errorConnection'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="booking-wrapper py-5">
+        <div className="glass-card mx-auto" style={{ maxWidth: '520px', padding: '40px 35px', borderRadius: '15px' }}>
+          <div className="booking-auth-gate">
+            <div className="auth-icon-badge">
+              <img src="/logo.png" alt="VD Nails" />
+            </div>
+            <h2 className="booking-title text-center mb-3">{t('booking.gateTitle')}</h2>
+            <p className="booking-auth-gate-text">
+              {t('booking.gateText')}
+            </p>
+            <div className="booking-auth-gate-actions">
+              <Link to="/login" state={{ from: '/booking', mode: 'register' }} className="pay-now-btn" style={{ margin: 0, display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
+                {t('booking.gateRegister')}
+              </Link>
+              <Link to="/login" state={{ from: '/booking', mode: 'login' }} className="booking-auth-gate-login-link">
+                {t('booking.gateLogin')}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="booking-wrapper py-5">
       <div className="glass-card mx-auto" style={{ maxWidth: '600px', padding: '30px', borderRadius: '15px' }}>
-        <h2 className="text-center mb-4" style={{ color: '#3b2b1f' }}>Κλείστε το Ραντεβού σας</h2>
-        
+        <h2 className="booking-title text-center mb-4">{t('booking.title')}</h2>
+
         <form onSubmit={handleSubmit} className="booking-form" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+
           <div style={{ background: '#f9fafb', padding: '15px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-            <input type="text" name="name" className="form-control mb-2" placeholder="Ονοματεπώνυμο *" required disabled={showStripeForm} value={clientData.name} onChange={handleClientChange} />
+            <input type="text" name="name" className="form-control vd-input mb-2" placeholder={t('booking.namePlaceholder')} required disabled={showStripeForm} value={clientData.name} onChange={handleClientChange} />
             {errors.name && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{errors.name}</p>}
 
-            <input type="tel" name="phone" className="form-control mb-2" placeholder="Τηλέφωνο *" required disabled={showStripeForm} value={clientData.phone} onChange={handleClientChange} />
+            <input type="tel" name="phone" className="form-control vd-input mb-2" placeholder={t('booking.phonePlaceholder')} required disabled={showStripeForm} value={clientData.phone} onChange={handleClientChange} />
             {errors.phone && <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{errors.phone}</p>}
 
-            <input type="email" name="email" className="form-control" placeholder="Email *" required disabled={showStripeForm} value={clientData.email} onChange={handleClientChange} />
+            <input type="email" name="email" className="form-control vd-input" placeholder={t('booking.emailPlaceholder')} required disabled={showStripeForm} value={clientData.email} onChange={handleClientChange} />
           </div>
 
           <div>
-            <select name="serviceId" value={formData.serviceId} className="form-control mb-3" disabled={showStripeForm} onChange={(e) => setFormData({...formData, serviceId: e.target.value})} required>
-              {availableServices.map(srv => (
-                <option key={srv.id} value={srv.id}>{srv.name} ({Number(srv.price).toFixed(2)}€)</option>
-              ))}
+            <select name="serviceId" value={formData.serviceId} className="form-control vd-input mb-3" disabled={showStripeForm} onChange={(e) => setFormData({...formData, serviceId: e.target.value})} required>
+              {groupedServices ? (
+                <>
+                  <option value="" disabled>{t('booking.selectService')}</option>
+                  {Object.entries(groupedServices).map(([category, services]) => (
+                    <optgroup key={category} label={category}>
+                      {services.map(srv => (
+                        <option key={srv.id} value={srv.id}>{srv.name} ({Number(srv.price).toFixed(2)}€)</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </>
+              ) : (
+                availableServices.map(srv => (
+                  <option key={srv.id} value={srv.id}>{srv.name} ({Number(srv.price).toFixed(2)}€)</option>
+                ))
+              )}
             </select>
 
-            <DatePicker 
-              selected={formData.date} 
+            <DatePicker
+              selected={formData.date}
               disabled={showStripeForm}
-              onChange={(d) => { setFormData({ ...formData, date: d, time: '' }); setErrors({}); setShowStripeForm(false); }} 
-              dateFormat="dd/MM/yyyy" minDate={new Date()} className="form-control w-100" placeholderText="Επιλέξτε ημέρα" required 
+              onChange={(d) => { setFormData({ ...formData, date: d, time: '' }); setErrors({}); setShowStripeForm(false); }}
+              dateFormat="dd/MM/yyyy" minDate={new Date()} className="form-control vd-input w-100" placeholderText={t('booking.selectDate')} required
             />
           </div>
 
           {formData.date && (
             <div>
-              <label className="fw-bold mb-2">Διαθέσιμες Ώρες</label>
+              <label className="fw-bold mb-2">{t('booking.availableTimes')}</label>
               {errors.time && <div className="text-danger small mb-2">{errors.time}</div>}
-              {loadingTimes ? <p className="text-muted">Αναζήτηση...</p> : (
+              {loadingTimes ? <p className="text-muted">{t('booking.searching')}</p> : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '10px' }}>
-                  {availableTimes.length > 0 ? availableTimes.map(t => (
-                    <button key={t} type="button" disabled={showStripeForm} onClick={() => { setFormData({ ...formData, time: t }); setErrors({}); setShowStripeForm(false); }}
-                      style={{ 
-                        padding: '8px', borderRadius: '6px', border: '1px solid #3b2b1f',
-                        background: formData.time === t ? '#3b2b1f' : 'transparent', color: formData.time === t ? '#fff' : '#3b2b1f', cursor: 'pointer'
-                      }}>
-                      {t}
+                  {availableTimes.length > 0 ? availableTimes.map(time => (
+                    <button key={time} type="button" disabled={showStripeForm} onClick={() => { setFormData({ ...formData, time: time }); setErrors({}); setShowStripeForm(false); }}
+                      className={`time-slot-btn${formData.time === time ? ' selected' : ''}`}>
+                      {time}
                     </button>
-                  )) : <p className="text-danger small">Δεν υπάρχουν διαθέσιμες ώρες.</p>}
+                  )) : <p className="text-danger small">{t('booking.noAvailableTimes')}</p>}
                 </div>
               )}
             </div>
@@ -338,17 +388,17 @@ export default function Booking() {
 
           {formData.time && (
             <div style={{ background: '#f3f4f6', padding: '15px', borderRadius: '8px' }}>
-               <label className="fw-bold mb-2">Τρόπος Πληρωμής</label>
+               <label className="fw-bold mb-2">{t('booking.paymentMethod')}</label>
                <div className="d-flex flex-column gap-2">
-                 <label style={{ cursor: 'pointer' }}>
-                   <input type="radio" name="payment" value="store" checked={formData.payment === 'store'} 
-                     onChange={(e) => { setFormData({...formData, payment: e.target.value}); setShowStripeForm(false); }} className="me-2" />
-                   Πληρωμή στο κατάστημα
+                 <label className={`payment-option${formData.payment === 'store' ? ' selected' : ''}`}>
+                   <input type="radio" name="payment" value="store" checked={formData.payment === 'store'}
+                     onChange={(e) => { setFormData({...formData, payment: e.target.value}); setShowStripeForm(false); }} />
+                   {t('booking.payAtStore')}
                  </label>
-                 <label style={{ cursor: 'pointer' }}>
-                   <input type="radio" name="payment" value="prepay" checked={formData.payment === 'prepay'} 
-                     onChange={(e) => setFormData({...formData, payment: e.target.value})} className="me-2" />
-                   Πληρωμή τώρα με Κάρτα
+                 <label className={`payment-option${formData.payment === 'prepay' ? ' selected' : ''}`}>
+                   <input type="radio" name="payment" value="prepay" checked={formData.payment === 'prepay'}
+                     onChange={(e) => setFormData({...formData, payment: e.target.value})} />
+                   {t('booking.payNow')}
                  </label>
                </div>
             </div>
@@ -359,8 +409,8 @@ export default function Booking() {
               <AppointmentPaymentForm totalAmount={selectedServiceObj.price} payload={getBookingPayload()} setIsSubmitting={setIsSubmitting} isSubmitting={isSubmitting} />
             </Elements>
           ) : (
-            <button type="submit" disabled={isSubmitting} className="btn w-100 fw-bold mt-2" style={{ backgroundColor: '#10b981', color: '#fff', padding: '12px' }}>
-              {isSubmitting ? 'Επεξεργασία...' : 'Επιβεβαίωση Στοιχείων & Κράτηση'}
+            <button type="submit" disabled={isSubmitting} className="pay-now-btn">
+              {isSubmitting ? t('booking.processing') : t('booking.confirmBooking')}
             </button>
           )}
 

@@ -3,9 +3,11 @@ import '../index.css';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useTranslation } from 'react-i18next';
 
 
 export default function Profile() {
+  const { t } = useTranslation();
 
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
@@ -60,13 +62,13 @@ export default function Profile() {
         window.dispatchEvent(new Event('storage')); // Ενημερώνει το Header
         setUser(updatedUser);
         setIsEditingUser(false);
-        toast.success("Τα στοιχεία σας ενημερώθηκαν!");
+        toast.success(t('profile.toastUserUpdated'));
       } else {
-        toast.error("Σφάλμα κατά την αποθήκευση.");
+        toast.error(t('profile.toastSaveError'));
       }
-    } catch (err) { 
-      toast.error("Σφάλμα επικοινωνίας.");
-      console.error(err); 
+    } catch (err) {
+      toast.error(t('profile.toastConnError'));
+      console.error(err);
     }
   };
 
@@ -79,22 +81,22 @@ export default function Profile() {
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
     setConfirmDialog({
       isOpen: true,
-      title: 'Ακύρωση Ραντεβού',
-      message: 'Είστε σίγουροι; Η ενέργεια είναι μη αναστρέψιμη.',
+      title: t('profile.cancelApptTitle'),
+      message: t('profile.cancelApptMsg'),
       onConfirm: async () => {
         try {
-          const res = await fetch(`${API_URL}/api/appointments/${apt.id}`, { 
-            method: 'DELETE', 
+          const res = await fetch(`${API_URL}/api/appointments/${apt.id}`, {
+            method: 'DELETE',
             headers: getAuthHeaders() // Έλειπε το Token!
           });
           if (res.ok) {
-            toast.success("Το ραντεβού ακυρώθηκε επιτυχώς!");
+            toast.success(t('profile.toastApptCancelled'));
             fetchData();
           } else {
-            toast.error("Σφάλμα κατά την ακύρωση του ραντεβού.");
+            toast.error(t('profile.toastApptCancelError'));
           }
         } catch (err) {
-          toast.error("Σφάλμα σύνδεσης με τον server.");
+          toast.error(t('profile.toastConnError'));
         }
       }
     });
@@ -102,7 +104,7 @@ export default function Profile() {
 
   const openRescheduleModal = (apt) => {
     if (getHoursDifference(apt.appointment_date, apt.appointment_time) < 24) {
-      toast.error("Η αλλαγή ραντεβού επιτρέπεται μόνο έως και 24 ώρες πριν.");
+      toast.error(t('profile.toastRescheduleTooLate'));
       return;
     }
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
@@ -125,16 +127,16 @@ export default function Profile() {
       });
 
       if (response.ok) {
-        toast.success("Το ραντεβού μετατέθηκε επιτυχώς!");
+        toast.success(t('profile.toastRescheduled'));
         setRescheduleModal({ isOpen: false, aptId: null, date: '', time: '' });
         fetchData();
       } else {
         const errData = await response.json();
-        toast.error("Σφάλμα: " + (errData.error || "Αποτυχία μετάθεσης."));
+        toast.error(errData.error || t('profile.toastRescheduleError'));
       }
     } catch (err) {
       console.error(err);
-      toast.error("Σφάλμα επικοινωνίας.");
+      toast.error(t('profile.toastConnError'));
     } finally {
       setLoading(false);
     }
@@ -144,8 +146,8 @@ export default function Profile() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setConfirmDialog({
       isOpen: true,
-      title: 'Ακύρωση Παραγγελίας',
-      message: 'Είστε σίγουροι ότι θέλετε να ακυρώσετε αυτή την παραγγελία; Η ενέργεια αυτή δεν αναιρείται.',
+      title: t('profile.cancelOrderTitle'),
+      message: t('profile.cancelOrderMsg'),
       onConfirm: async () => {
         try {
           const res = await fetch(`${API_URL}/api/orders/${orderId}`, {
@@ -153,56 +155,56 @@ export default function Profile() {
             headers: getAuthHeaders(),
             body: JSON.stringify({ status: 'cancelled' })
           });
-          
+
           if (res.ok) {
-            toast.success("Η παραγγελία ακυρώθηκε επιτυχώς.");
+            toast.success(t('profile.toastOrderCancelled'));
             fetchData();
           } else {
-            toast.error("Δεν ήταν δυνατή η ακύρωση της παραγγελίας.");
+            toast.error(t('profile.toastOrderCancelError'));
           }
         } catch (err) {
-          toast.error("Σφάλμα σύνδεσης με τον server.");
+          toast.error(t('profile.toastConnError'));
         }
       }
     });
   };
 
   if (!user) return null;
-  if (loading) return <div className="pro-loader">Φόρτωση δεδομένων...</div>;
+  if (loading) return <div className="pro-loader">{t('profile.loading')}</div>;
 
   return (
     <div className="pro-layout">
       {/* ΠΡΟΣΩΠΙΚΑ ΣΤΟΙΧΕΙΑ */}
       <div className="pro-panel">
         <div className="pro-panel-header">
-          <h2>Προσωπικά Στοιχεία</h2>
-          {!isEditingUser && <button className="pro-link-btn" onClick={() => setIsEditingUser(true)}>Επεξεργασία</button>}
+          <h2>{t('profile.personalInfo')}</h2>
+          {!isEditingUser && <button className="pro-link-btn" onClick={() => setIsEditingUser(true)}>{t('profile.edit')}</button>}
         </div>
-        
+
         {isEditingUser ? (
           <div className="pro-form-grid">
             <div className="pro-input-group">
-              <label>Ονοματεπώνυμο</label>
+              <label>{t('profile.fullName')}</label>
               <input type="text" value={user.name} disabled className="pro-input disabled" />
             </div>
             <div className="pro-input-group">
-              <label>Email</label>
+              <label>{t('profile.email')}</label>
               <input type="email" value={editUserData.email} onChange={(e) => setEditUserData({...editUserData, email: e.target.value})} className="pro-input" />
             </div>
             <div className="pro-input-group">
-              <label>Τηλέφωνο</label>
+              <label>{t('profile.phone')}</label>
               <input type="text" value={editUserData.phone} onChange={(e) => setEditUserData({...editUserData, phone: e.target.value})} className="pro-input" />
             </div>
             <div className="pro-form-actions">
-              <button className="pro-btn primary" onClick={handleSaveUser}>Αποθήκευση</button>
-              <button className="pro-btn secondary" onClick={() => setIsEditingUser(false)}>Ακύρωση</button>
+              <button className="pro-btn primary" onClick={handleSaveUser}>{t('profile.save')}</button>
+              <button className="pro-btn secondary" onClick={() => setIsEditingUser(false)}>{t('profile.cancel')}</button>
             </div>
           </div>
         ) : (
           <div className="pro-info-grid">
-            <div><label>Ονοματεπώνυμο</label><p>{user.name}</p></div>
-            <div><label>Email</label><p>{user.email}</p></div>
-            <div><label>Τηλέφωνο</label><p>{user.phone}</p></div>
+            <div><label>{t('profile.fullName')}</label><p>{user.name}</p></div>
+            <div><label>{t('profile.email')}</label><p>{user.email}</p></div>
+            <div><label>{t('profile.phone')}</label><p>{user.phone}</p></div>
           </div>
         )}
       </div>
@@ -210,8 +212,8 @@ export default function Profile() {
       <div className="pro-split-layout">
         {/* ΡΑΝΤΕΒΟΥ */}
         <div className="pro-panel">
-          <h2>Ιστορικό Ραντεβού</h2>
-          {history.appointments.length === 0 ? <p className="pro-empty">Δεν βρέθηκαν ραντεβού.</p> : (
+          <h2>{t('profile.appointmentsHistory')}</h2>
+          {history.appointments.length === 0 ? <p className="pro-empty">{t('profile.noAppointments')}</p> : (
             <div className="pro-list">
               {history.appointments.map(apt => (
                 <div key={apt.id} className="pro-list-item">
@@ -220,8 +222,8 @@ export default function Profile() {
                     <span className="pro-date">{apt.appointment_date.slice(0,10)} | {apt.appointment_time.slice(0,5)}</span>
                   </div>
                   <div className="pro-item-actions">
-                    <button className="pro-link-btn" onClick={() => openRescheduleModal(apt)}>Μετάθεση</button>
-                    <button className="pro-link-btn danger" onClick={() => cancelAppointment(apt)}>Ακύρωση</button>
+                    <button className="pro-link-btn" onClick={() => openRescheduleModal(apt)}>{t('profile.reschedule')}</button>
+                    <button className="pro-link-btn danger" onClick={() => cancelAppointment(apt)}>{t('profile.cancelBtn')}</button>
                   </div>
                 </div>
               ))}
@@ -231,16 +233,16 @@ export default function Profile() {
 
         {/* ΠΑΡΑΓΓΕΛΙΕΣ */}
         <div className="pro-panel">
-          <h2>Ιστορικό Παραγγελιών</h2>
-          {history.orders.length === 0 ? <p className="pro-empty">Δεν βρέθηκαν παραγγελίες.</p> : (
+          <h2>{t('profile.ordersHistory')}</h2>
+          {history.orders.length === 0 ? <p className="pro-empty">{t('profile.noOrders')}</p> : (
             <div className="pro-list">
               {history.orders.map(order => (
                 <div key={order.id} className="pro-list-item order-card">
                   <div className="order-top">
-                    <span className="order-id">Παραγγελία #{order.id}</span>
+                    <span className="order-id">{t('profile.orderNumber')} #{order.id}</span>
                     <span className={`pro-badge ${order.status || 'pending'}`}>{(order.status || 'pending').toUpperCase()}</span>
                   </div>
-                  
+
                   {/* ΕΜΦΑΝΙΣΗ ΠΡΟΙΟΝΤΩΝ */}
                   <div className="order-products">
                     {order.products && (typeof order.products === 'string' ? JSON.parse(order.products) : order.products).map((p, i) => (
@@ -253,7 +255,7 @@ export default function Profile() {
                   <div className="order-bottom">
                     <span className="order-total">{Number(order.total_amount).toFixed(2)}€</span>
                     {(order.status === 'pending' || !order.status) && (
-                      <button className="pro-link-btn danger" onClick={() => cancelOrder(order.id)}>Ακύρωση Παραγγελίας</button>
+                      <button className="pro-link-btn danger" onClick={() => cancelOrder(order.id)}>{t('profile.cancelOrder')}</button>
                     )}
                   </div>
                 </div>
@@ -269,7 +271,7 @@ export default function Profile() {
       {rescheduleModal.isOpen && (
         <div className="pro-modal-overlay">
           <div className="pro-modal">
-            <h3>Επιλογή νέας ώρας</h3>
+            <h3>{t('profile.rescheduleTitle')}</h3>
             <input type="date" className="pro-input" value={rescheduleModal.date} onChange={(e) => setRescheduleModal({...rescheduleModal, date: e.target.value})} />
             <div className="time-slots-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '15px' }}>
               {['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'].map(time => (
@@ -277,8 +279,8 @@ export default function Profile() {
               ))}
             </div>
             <div className="pro-modal-actions">
-              <button className="pro-btn primary" onClick={submitReschedule} disabled={loading}>{loading ? '...' : 'Επιβεβαίωση'}</button>
-              <button className="pro-btn secondary" onClick={() => setRescheduleModal({...rescheduleModal, isOpen: false})}>Άκυρο</button>
+              <button className="pro-btn primary" onClick={submitReschedule} disabled={loading}>{loading ? '...' : t('profile.confirm')}</button>
+              <button className="pro-btn secondary" onClick={() => setRescheduleModal({...rescheduleModal, isOpen: false})}>{t('profile.cancelSmall')}</button>
             </div>
           </div>
         </div>
@@ -291,8 +293,8 @@ export default function Profile() {
             <h3>{confirmDialog.title}</h3>
             <p>{confirmDialog.message}</p>
             <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="pro-btn primary" onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({...confirmDialog, isOpen: false}); }}>Ναι, Επιβεβαίωση</button>
-              <button className="pro-btn secondary" onClick={() => setConfirmDialog({...confirmDialog, isOpen: false})}>Άκυρο</button>
+              <button className="pro-btn primary" onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({...confirmDialog, isOpen: false}); }}>{t('profile.confirmYes')}</button>
+              <button className="pro-btn secondary" onClick={() => setConfirmDialog({...confirmDialog, isOpen: false})}>{t('profile.cancelSmall')}</button>
             </div>
           </div>
         </div>

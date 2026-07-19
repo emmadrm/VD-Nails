@@ -17,9 +17,11 @@ const initDatabase = async () => {
         price DECIMAL(10,2) NOT NULL,
         image_url TEXT,
         stock INT DEFAULT 10,
+        category VARCHAR(100) NOT NULL DEFAULT 'Γενικά',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(100) NOT NULL DEFAULT 'Γενικά';`);
 
     // 2. ΠΙΝΑΚΑΣ: Παραγγελίες
     await pool.query(`

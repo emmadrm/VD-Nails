@@ -24,8 +24,10 @@ import './index.css';
 import React, {useState, useEffect} from 'react';
 import {BrowserRouter , Routes , Route} from 'react-router-dom';
 import CookieConsent from "react-cookie-consent";
+import { useTranslation } from 'react-i18next';
 
 function App() {
+  const { t } = useTranslation();
   const [cart, setCart] = useState(() => {
     const savedCart = localStorage.getItem('vd_nails_cart');
     return savedCart ? JSON.parse(savedCart) : [];
@@ -49,8 +51,8 @@ function App() {
       <CookieConsent
           location="none"
           overlay={true}
-          buttonText="Αποδοχή Όλων"
-          declineButtonText="Απόρριψη"
+          buttonText={t('cookieConsent.accept')}
+          declineButtonText={t('cookieConsent.decline')}
           enableDeclineButton
           cookieName="vdnails_gdpr_consent"
           style={{ 
@@ -71,9 +73,9 @@ function App() {
           declineButtonStyle={{ background: "#f3f4f6", color: "#495057", fontSize: "14px", fontWeight: "bold", borderRadius: "8px", padding: "10px 20px" }}
           expires={10} 
         >
-          <h3 style={{ margin: "0 0 10px 0", fontSize: "1.3rem", color: "#3b2b1f" }}>🍪 Ρυθμίσεις Cookies</h3>
-          Χρησιμοποιούμε cookies για να βελτιώσουμε την εμπειρία σας στο κατάστημά μας. 
-          Μπορείτε να δείτε αναλυτικά την <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", fontWeight: "bold", textDecoration: "none" }}>Πολιτική Απορρήτου</a> μας.
+          <h3 style={{ margin: "0 0 10px 0", fontSize: "1.3rem", color: "#3b2b1f" }}>{t('cookieConsent.title')}</h3>
+          {t('cookieConsent.text')}{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", fontWeight: "bold", textDecoration: "none" }}>{t('cookieConsent.privacyLink')}</a>.
         </CookieConsent>
       )}
         <Routes>
