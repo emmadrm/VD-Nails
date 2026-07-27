@@ -22,9 +22,19 @@ import NotFound from './components/NotFound.jsx';
 
 import './index.css';
 import React, {useState, useEffect} from 'react';
-import {BrowserRouter , Routes , Route} from 'react-router-dom';
+import {BrowserRouter , Routes , Route, useLocation} from 'react-router-dom';
 import CookieConsent from "react-cookie-consent";
 import { useTranslation } from 'react-i18next';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname]);
+
+  return null;
+}
 
 function App() {
   const { t } = useTranslation();
@@ -44,6 +54,7 @@ function App() {
   return (
     <div>
       <BrowserRouter>
+      <ScrollToTop />
       <Header cart={cart} setCart={setCart}/>
       
       {/* ΝΕΟ ΚΕΝΤΡΙΚΟ ΠΑΡΑΘΥΡΟ ΓΙΑ COOKIES */}

@@ -1,2 +1,4 @@
 User-agent: *
 Disallow: /vd-admin-12xE5
+
+Sitemap: https://vdnails.gr/sitemap.xml

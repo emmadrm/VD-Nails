@@ -9,12 +9,25 @@ body {
     backdrop-filter: blur(0px);
    /* background: linear-gradient(0deg, rgb(69, 138, 152) 20%, rgb(190, 210, 214) 100%);
     background: #BED2D6; */
-   background-image: url('./assets/back.jpg');
+
+
+   /* background-image: url('./assets/back.jpg');
    background-repeat: repeat;
    background-size: 360px 360px;
    width: 100%;
    margin: 0;
    overflow-x: clip;
+   */
+
+   
+   background-image: url('./assets/back-6.jpeg');
+   background-size: 1500px 1600px;
+   backdrop-filter: blur(2px);
+   width: 100%;
+   margin: 0;
+   overflow-x: clip;
+
+
 
 }
 
@@ -345,6 +358,7 @@ body {
   align-items: center;
   margin: 10px 0;
 }
+
 .mirror-button {
   background: linear-gradient(135deg, #efecec 0%, #b0aaaa 100%);
   color: #1d1c1c !important;
@@ -413,7 +427,7 @@ body {
   position: absolute;
   width: 0;
   height: 0;
-}
+} 
 
 /* services */
 
@@ -1690,7 +1704,7 @@ textarea:focus {
 
 /* Footer */
 .footer-professional {
-  background: linear-gradient(180deg, #d7dee2 0%, #c5ced3 100%);
+  background: linear-gradient(180deg, #e7f1f8 0%, #acb3b6 100%);
   color: #52585c;
   border-top: 1px solid #b9c2c8;
 }

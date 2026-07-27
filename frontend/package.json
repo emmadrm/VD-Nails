@@ -23,7 +23,8 @@
     "react-dom": "^19.2.4",
     "react-i18next": "^17.0.10",
     "react-router-dom": "^7.11.0",
-    "react-toastify": "^11.1.0"
+    "react-toastify": "^11.1.0",
+    "vite-plugin-sitemap": "^0.8.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
