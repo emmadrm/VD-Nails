@@ -7,33 +7,21 @@ html {
 
 body {
     backdrop-filter: blur(0px);
-   /* background: linear-gradient(0deg, rgb(69, 138, 152) 20%, rgb(190, 210, 214) 100%);
-    background: #BED2D6; */
-
-
-   /* background-image: url('./assets/back.jpg');
-   background-repeat: repeat;
-   background-size: 360px 360px;
-   width: 100%;
-   margin: 0;
-   overflow-x: clip;
-   */
-
-   
-   background-image: url('./assets/back-6.jpeg');
-   background-size: 1500px 1600px;
-   backdrop-filter: blur(2px);
-   width: 100%;
-   margin: 0;
-   overflow-x: clip;
-
-
-
+    background-image: url('./assets/back-6.jpeg');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    background-attachment: scroll;
+    min-height: 100vh;
+    width: 100%;
+    margin: 0;
+    overflow-x: clip;
 }
 
 @media (max-width: 600px) {
   body {
-    background-size: 180px 180px;
+    background-size: cover;
+    background-position: center center;
   }
 }
 
