@@ -107,6 +107,7 @@ function Header({ cart, setCart }) {
   return (
     <div className="Header"> 
       <header className="py-3 mb-4 border-bottom position-relative">
+        <h3 className='text-center py-4'>Η σελίδα βρίσκεται υπο κατασκευή. Όλες οι παραγγελίες και τα ραντεβού είναι άκυρα. </h3>
       
         {/* --- ΕΙΔΙΚΗ ΘΕΣΗ ΓΙΑ ΚΙΝΗΤΑ (Top Right) --- */}
         <div className="d-md-none position-absolute d-flex flex-column align-items-end gap-2" style={{ top: '15px', right: '15px', zIndex: 100 }}>
