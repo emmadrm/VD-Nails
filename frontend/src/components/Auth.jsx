@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../index.css';
 
@@ -82,6 +82,14 @@ export default function Auth() {
           <input type="email" name="email" className="form-control vd-input" placeholder={t('auth.emailPlaceholder')} required value={formData.email} onChange={handleChange} />
 
           <input type="password" name="password" className="form-control vd-input" placeholder={t('auth.passwordPlaceholder')} required value={formData.password} onChange={handleChange} />
+
+          {isLogin && (
+            <div style={{ textAlign: 'right', marginBottom: '8px' }}>
+              <Link to="/forgot-password" className="forgot-password-link" style={{ color: '#10b981', textDecoration: 'none', fontSize: '0.95rem' }}>
+                {t('auth.forgotPassword')}
+              </Link>
+            </div>
+          )}
 
           <button type="submit" className="pay-now-btn" style={{ marginTop: '5px' }}>
             {isLogin ? t('auth.login') : t('auth.register')}

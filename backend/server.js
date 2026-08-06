@@ -7,8 +7,9 @@ require('dotenv').config();
 const pool = require('./db');
 const stripe = require('stripe')(process.env.STRIPE_SEC_KEY);
 const bcrypt = require('bcrypt');
-const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const helmet = require('helmet');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -17,7 +18,7 @@ const app = express();
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε ξανά μετά από 15 λεπτά." } });
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Πολλά αιτήματα από αυτή την IP." } });
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinaryStorage = require('multer-storage-cloudinary');
 
 cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
@@ -25,8 +26,8 @@ cloudinary.config({
   api_secret: process.env.API_SECRET
 });
 
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
+const storage = cloudinaryStorage({
+  cloudinary,
   params: {
     folder: 'vd-nails-products',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
@@ -86,10 +87,43 @@ const sendBrevoTemplateEmail = async (toEmail, toName, templateId, params) => {
   } catch (err) {console.error(err.message)};
 };
 
+const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SENDER_EMAIL;
+  if (!senderEmail) {
+    throw new Error('Missing BREVO_SENDER_EMAIL or SENDER_EMAIL in environment');
+  }
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      sender: {
+        email: senderEmail,
+        name: process.env.BREVO_SENDER_NAME || 'VD Nails'
+      },
+      to: [{ email: toEmail }],
+      subject,
+      htmlContent
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    console.error(`Brevo email failed: ${response.status} ${response.statusText} - ${body}`);
+    throw new Error(`Brevo email failed: ${response.status} ${response.statusText}`);
+  }
+};
+
 app.post('/create-payment-intent', async (req, res) => {
   try {
     const { amount } = req.body;
-    const paymentIntent = await stripe.paymentIntents.create({ amount: amount, currency: 'eur' });
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'eur',
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
     res.json({ clientSecret: paymentIntent.client_secret });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
@@ -332,6 +366,72 @@ app.post('/api/login', async (req, res) => {
     const user = result.rows[0];
     res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, phone: user.phone } });
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.post('/api/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  console.log('Forgot-password request for:', email);
+  if (!email) return res.status(400).json({ error: 'Το email είναι υποχρεωτικό.' });
+
+  try {
+    const result = await pool.query('SELECT id, name FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      console.log('Forgot-password: email not found, sending generic response:', email);
+      return res.json({ message: 'Αν υπάρχει αυτό το email, θα λάβετε σύντομα οδηγίες επαναφοράς.' });
+    }
+
+    const user = result.rows[0];
+    const token = crypto.randomBytes(48).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await pool.query('INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)', [user.id, token, expiresAt]);
+
+    const frontendUrl = process.env.FRONTEND_URL;
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
+    const html = `
+      <p>Γεια σας ${user.name},</p>
+      <p>Κάντε κλικ στον παρακάτω σύνδεσμο για να επαναφέρετε τον κωδικό σας:</p>
+      <p><a href="${resetUrl}">${resetUrl}</a></p>
+      <p>Ο σύνδεσμος λήγει σε 1 ώρα.</p>
+    `;
+
+    await sendBrevoEmail(email, 'Επαναφορά Κωδικού VD Nails', html);
+    console.log('Forgot-password email sent successfully to:', email, 'via sender', process.env.BREVO_SENDER_EMAIL || process.env.SENDER_EMAIL);
+    res.json({ message: 'Αν υπάρχει αυτό το email, θα λάβετε σύντομα οδηγίες επαναφοράς.' });
+  } catch (err) {
+    console.error('Forgot-password failed for', email, err);
+    res.status(500).json({ error: 'Σφάλμα στην επεξεργασία του αιτήματος επαναφοράς.' });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'Απαιτείται token και νέος κωδικός.' });
+
+  try {
+    const tokenResult = await pool.query(
+      'SELECT t.user_id, t.expires_at, t.used FROM password_reset_tokens t WHERE t.token = $1',
+      [token]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Άκυρο ή ληγμένο token επαναφοράς.' });
+    }
+
+    const record = tokenResult.rows[0];
+    if (record.used || new Date(record.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Άκυρο ή ληγμένο token επαναφοράς.' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, record.user_id]);
+    await pool.query('UPDATE password_reset_tokens SET used = true WHERE token = $1', [token]);
+
+    res.json({ message: 'Ο κωδικός επαναφέρθηκε με επιτυχία. Μπορείτε τώρα να συνδεθείτε.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Σφάλμα κατά την επαναφορά του κωδικού.' });
+  }
 });
 
 app.get('/api/user/history/:userId', async (req, res) => {

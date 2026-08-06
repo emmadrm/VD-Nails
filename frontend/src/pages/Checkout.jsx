@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -10,98 +10,229 @@ const stripePromise = loadStripe(stripePublishableKey);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
-const PaymentForm = ({ finalTotal, emptyCart, cart, formData, lockerDataRef }) => {
+
+const PaymentForm = ({
+  clientSecret,
+  finalTotal,
+  emptyCart,
+  cart,
+  formData,
+  lockerDataRef
+}) => {
   const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
+
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [paymentRequest, setPaymentRequest] = useState(null);
+  const [walletAvailable, setWalletAvailable] = useState(false);
 
-  const loggedInUser = JSON.parse(localStorage.getItem('vd_user'));
+  const loggedInUser = JSON.parse(localStorage.getItem("vd_user"));
   const userId = loggedInUser ? loggedInUser.id : null;
 
+  const completeOrder = async (stripeId) => {
+    await fetch(`${API_URL}/api/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        client_name: formData.name,
+        client_email: formData.email,
+        client_phone: formData.phone,
+        customer_notes: formData.notes || "N/A",
+        products: cart,
+        boxnow_locker: lockerDataRef.current || "N/A",
+        total_amount: finalTotal,
+        stripe_id: stripeId,
+      }),
+    });
+
+    emptyCart();
+    navigate("/success");
+  };
+
   const handleSubmit = async (e) => {
-    e.preventDefault(); 
-    if (!stripe || !elements) return; 
+    e.preventDefault();
+
+    if (!stripe || !elements) return;
 
     setProcessing(true);
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/create-payment-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Math.round(finalTotal * 100) }) 
-      });
-      
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      
-      const clientSecret = data.clientSecret;
-
-      const result = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: elements.getElement(CardElement),
-          billing_details: { name: formData.name },
-        }
+      const result = await stripe.confirmPayment({
+        elements,
+        clientSecret,
+        redirect: "if_required",
+        confirmParams: {
+          return_url: `${window.location.origin}/success`,
+        },
       });
 
       if (result.error) {
         setError(result.error.message);
-      } else if (result.paymentIntent.status === 'succeeded') {
-        const stripeId = result.paymentIntent.id;
-
-        // Αποθήκευση της παραγγελίας στη βάση
-        await fetch(`${API_URL}/api/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: userId, 
-            client_name: formData.name,
-            client_email: formData.email,
-            client_phone: formData.phone,
-            customer_notes: formData.notes || 'N/A',
-            products: cart,
-            boxnow_locker: lockerDataRef.current || 'N/A',
-            total_amount: finalTotal, 
-            stripe_id: stripeId
-          })
-        });
-
-        emptyCart();
-        navigate('/success');
+      } else if (result.paymentIntent?.status === "succeeded") {
+        await completeOrder(result.paymentIntent.id);
       }
     } catch (err) {
       console.error(err);
-      setError(t('checkout.errorGeneric'));
+      setError(t("checkout.errorGeneric"));
     }
-    
+
     setProcessing(false);
   };
+
+  useEffect(() => {
+    if (!stripe || !clientSecret) return;
+
+    const paymentRequestInstance = stripe.paymentRequest({
+      country: 'GR',
+      currency: 'eur',
+      total: {
+        label: 'VD Nails',
+        amount: Math.round(finalTotal * 100),
+      },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    paymentRequestInstance.canMakePayment().then((result) => {
+      if (result) {
+        setPaymentRequest(paymentRequestInstance);
+        setWalletAvailable(true);
+      }
+    });
+
+    const handlePaymentMethod = async (event) => {
+      setProcessing(true);
+      setError(null);
+
+      try {
+        const { error, paymentIntent } = await stripe.confirmCardPayment(
+          clientSecret,
+          { payment_method: event.paymentMethod.id },
+          { handleActions: false }
+        );
+
+        if (error) {
+          event.complete('fail');
+          setError(error.message);
+        } else {
+          if (paymentIntent?.status === 'requires_action') {
+            const confirmResult = await stripe.confirmCardPayment(clientSecret);
+            if (confirmResult.error) {
+              event.complete('fail');
+              setError(confirmResult.error.message);
+              return;
+            }
+
+            if (confirmResult.paymentIntent?.status === 'succeeded') {
+              event.complete('success');
+              await completeOrder(confirmResult.paymentIntent.id);
+            }
+          } else if (paymentIntent?.status === 'succeeded') {
+            event.complete('success');
+            await completeOrder(paymentIntent.id);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        setError(t('checkout.errorGeneric'));
+        event.complete('fail');
+      }
+
+      setProcessing(false);
+    };
+
+    paymentRequestInstance.on('paymentmethod', handlePaymentMethod);
+
+    return () => {
+      paymentRequestInstance.off('paymentmethod', handlePaymentMethod);
+    };
+  }, [stripe, clientSecret, finalTotal, t]);
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="mock-stripe-container">
         <div className="form-group">
-          <label>{t('checkout.cardDetails')}</label>
-          <div className="card-inputs-wrapper" style={{ padding: '15px', width: '100%', backgroundColor: '#ffffff', minHeight: '50px' }}>
-            <CardElement options={{ style: { base: { fontSize: '16px', color: '#3b2b1f' } } }} />
+          <label>{t("checkout.cardDetails")}</label>
+
+          <div
+            className="card-inputs-wrapper"
+            style={{
+              padding: "15px",
+              width: "100%",
+              backgroundColor: "#fff",
+              borderRadius: "10px",
+            }}
+          >
+            {walletAvailable && paymentRequest ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <PaymentRequestButtonElement
+                  options={{
+                    paymentRequest,
+                    style: {
+                      paymentRequestButton: {
+                        type: 'buy',
+                        theme: 'dark',
+                        height: '45px',
+                      },
+                    },
+                  }}
+                />
+                <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '15px' }}>
+                  <PaymentElement />
+                </div>
+              </div>
+            ) : (
+              <PaymentElement />
+            )}
           </div>
         </div>
       </div>
 
-      {error && <div style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.9rem' }}>{error}</div>}
+      {error && (
+        <div
+          style={{
+            color: "#ef4444",
+            marginTop: "10px",
+            fontSize: "0.9rem",
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       <div className="terms-checkbox">
         <label>
           <input type="checkbox" required />
-          <span>{t('checkout.termsPrefix')} <a href="/terms" target="_blank">{t('footer.terms')}</a> {t('checkout.termsAnd')} <a href="/privacy" target="_blank">{t('footer.privacy')}</a>. *</span>
+
+          <span>
+            {t("checkout.termsPrefix")}{" "}
+            <a href="/terms" target="_blank">
+              {t("footer.terms")}
+            </a>{" "}
+            {t("checkout.termsAnd")}{" "}
+            <a href="/privacy" target="_blank">
+              {t("footer.privacy")}
+            </a>
+            . *
+          </span>
         </label>
       </div>
 
-      <button type="submit" disabled={!stripe || processing} className="pay-now-btn">
-        {processing ? t('checkout.processingPayment') : `${t('checkout.payAndComplete')} ${finalTotal.toFixed(2)}€`}
+      <button
+        type="submit"
+        disabled={!stripe || processing}
+        className="pay-now-btn"
+      >
+        {processing
+          ? t("checkout.processingPayment")
+          : `${t("checkout.payAndComplete")} ${finalTotal.toFixed(2)}€`}
       </button>
     </form>
   );
@@ -163,6 +294,8 @@ export default function Checkout({ cart, setCart }) {
   
   const lockerDataRef = useRef(null);
   const [hasSelectedLocker, setHasSelectedLocker] = useState(false);
+  const [clientSecret, setClientSecret] = useState("");
+  const [loadingPayment, setLoadingPayment] = useState(false);
 
   // Υπολογισμός Κόστους
   const cartSubtotal = cart ? cart.reduce((total, item) => total + (item.price * item.qty), 0) : 0;
@@ -170,6 +303,39 @@ export default function Checkout({ cart, setCart }) {
   // Δωρεάν μεταφορικά αν το καλάθι είναι πάνω από 39€, αλλιώς 2€
   const shippingCost = cartSubtotal >= 39 ? 0 : 2.00; 
   const finalTotal = cartSubtotal + shippingCost;
+
+  useEffect(() => {
+  if (step !== 3 || !hasSelectedLocker) return;
+
+  setClientSecret("");
+  const createPaymentIntent = async () => {
+    try {
+      setLoadingPayment(true);
+
+      const res = await fetch(`${API_URL}/create-payment-intent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: Math.round(finalTotal * 100),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.clientSecret) {
+        setClientSecret(data.clientSecret);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPayment(false);
+    }
+  };
+
+  createPaymentIntent();
+  }, [step, hasSelectedLocker, finalTotal]);
 
   const emptyCart = () => {
     setCart([]);
@@ -307,11 +473,31 @@ export default function Checkout({ cart, setCart }) {
           {/* ΒΗΜΑ 3: Πληρωμή Stripe */}
           {step === 3 && hasSelectedLocker && (
             <div className="checkout-block">
-              <h3>{t('checkout.step3Title')}</h3>
-              <p className="stripe-info">{t('checkout.stripeInfo')} <strong>Stripe</strong></p>
-              <Elements stripe={stripePromise}>
-                <PaymentForm finalTotal={finalTotal} emptyCart={emptyCart} cart={cart} formData={formData} lockerDataRef={lockerDataRef}/>
-              </Elements>
+              <h3>{t("checkout.step3Title")}</h3>
+
+              <p className="stripe-info">
+                {t("checkout.stripeInfo")} <strong>Stripe</strong>
+              </p>
+
+              {loadingPayment ? (
+                <p>{t("checkout.processingPayment")}</p>
+              ) : (
+                clientSecret && (
+                  <Elements
+                    stripe={stripePromise}
+                    options={{ clientSecret }}
+                  >
+                    <PaymentForm
+                      clientSecret={clientSecret}
+                      finalTotal={finalTotal}
+                      emptyCart={emptyCart}
+                      cart={cart}
+                      formData={formData}
+                      lockerDataRef={lockerDataRef}
+                    />
+                  </Elements>
+                )
+              )}
             </div>
           )}
 

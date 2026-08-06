@@ -160,6 +160,15 @@
     "phonePlaceholder": "Phone *",
     "emailPlaceholder": "Email *",
     "passwordPlaceholder": "Password *",
+    "forgotPassword": "Forgot your password?",
+    "forgotPasswordTitle": "Reset Your Password",
+    "sendResetLink": "Send Reset Link",
+    "backToLogin": "Back to Login",
+    "resetPasswordTitle": "Create a New Password",
+    "newPasswordPlaceholder": "New Password *",
+    "confirmPasswordPlaceholder": "Confirm Password *",
+    "resetPassword": "Reset Password",
+    "passwordsMustMatch": "Passwords must match.",
     "errorGeneric": "There was a problem with the server. Please try again."
   },
   "profile": {

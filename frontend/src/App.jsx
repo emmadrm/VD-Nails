@@ -15,6 +15,8 @@ import Success from './components/Success.jsx';
 import Admin from './pages/Admin.jsx';
 import Profile from './pages/Profile.jsx';
 import Auth from './components/Auth.jsx';
+import ForgotPassword from './components/ForgotPassword.jsx';
+import ResetPassword from './components/ResetPassword.jsx';
 import ServiceDetails from './pages/ServiceDetails.jsx';
 import AdminLogin from './components/AdminLogin.jsx';
 import NotFound from './components/NotFound.jsx';
@@ -106,6 +108,8 @@ function App() {
           <Route path="/admin" element={<Admin />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Auth />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/services/:category" element={<ServiceDetails />} />
           <Route path="*" element={<NotFound />} />
           <Route path="/notfound" element={<NotFound />} />

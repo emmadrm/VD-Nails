@@ -98,6 +98,17 @@ const initDatabase = async () => {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        token VARCHAR(128) NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Αρχικές τιμές για Υπηρεσίες αν είναι άδειες
     const serviceCheck = await pool.query('SELECT COUNT(*) FROM services');
     if (parseInt(serviceCheck.rows[0].count) === 0) {

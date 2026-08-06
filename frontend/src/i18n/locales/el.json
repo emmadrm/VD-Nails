@@ -160,6 +160,15 @@
     "phonePlaceholder": "Τηλέφωνο *",
     "emailPlaceholder": "Email *",
     "passwordPlaceholder": "Κωδικός *",
+    "forgotPassword": "Ξεχάσατε τον κωδικό;",
+    "forgotPasswordTitle": "Επαναφορά Κωδικού",
+    "sendResetLink": "Αποστολή Συνδέσμου",
+    "backToLogin": "Επιστροφή στη Σύνδεση",
+    "resetPasswordTitle": "Ορίστε νέο κωδικό",
+    "newPasswordPlaceholder": "Νέος Κωδικός *",
+    "confirmPasswordPlaceholder": "Επαλήθευση Κωδικού *",
+    "resetPassword": "Επαναφορά Κωδικού",
+    "passwordsMustMatch": "Οι κωδικοί πρέπει να ταιριάζουν.",
     "errorGeneric": "Υπήρξε κάποιο πρόβλημα με τον server. Προσπαθήστε ξανά."
   },
   "profile": {
