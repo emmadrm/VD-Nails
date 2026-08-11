@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -26,8 +26,6 @@ const PaymentForm = ({
 
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
-  const [paymentRequest, setPaymentRequest] = useState(null);
-  const [walletAvailable, setWalletAvailable] = useState(false);
 
   const loggedInUser = JSON.parse(localStorage.getItem("vd_user"));
   const userId = loggedInUser ? loggedInUser.id : null;
@@ -64,6 +62,13 @@ const PaymentForm = ({
     setError(null);
 
     try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setError(submitError.message);
+        setProcessing(false);
+        return;
+      }
+
       const result = await stripe.confirmPayment({
         elements,
         clientSecret,
@@ -86,75 +91,6 @@ const PaymentForm = ({
     setProcessing(false);
   };
 
-  useEffect(() => {
-    if (!stripe || !clientSecret) return;
-
-    const paymentRequestInstance = stripe.paymentRequest({
-      country: 'GR',
-      currency: 'eur',
-      total: {
-        label: 'VD Nails',
-        amount: Math.round(finalTotal * 100),
-      },
-      requestPayerName: true,
-      requestPayerEmail: true,
-    });
-
-    paymentRequestInstance.canMakePayment().then((result) => {
-      if (result) {
-        setPaymentRequest(paymentRequestInstance);
-        setWalletAvailable(true);
-      }
-    });
-
-    const handlePaymentMethod = async (event) => {
-      setProcessing(true);
-      setError(null);
-
-      try {
-        const { error, paymentIntent } = await stripe.confirmCardPayment(
-          clientSecret,
-          { payment_method: event.paymentMethod.id },
-          { handleActions: false }
-        );
-
-        if (error) {
-          event.complete('fail');
-          setError(error.message);
-        } else {
-          if (paymentIntent?.status === 'requires_action') {
-            const confirmResult = await stripe.confirmCardPayment(clientSecret);
-            if (confirmResult.error) {
-              event.complete('fail');
-              setError(confirmResult.error.message);
-              return;
-            }
-
-            if (confirmResult.paymentIntent?.status === 'succeeded') {
-              event.complete('success');
-              await completeOrder(confirmResult.paymentIntent.id);
-            }
-          } else if (paymentIntent?.status === 'succeeded') {
-            event.complete('success');
-            await completeOrder(paymentIntent.id);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-        setError(t('checkout.errorGeneric'));
-        event.complete('fail');
-      }
-
-      setProcessing(false);
-    };
-
-    paymentRequestInstance.on('paymentmethod', handlePaymentMethod);
-
-    return () => {
-      paymentRequestInstance.off('paymentmethod', handlePaymentMethod);
-    };
-  }, [stripe, clientSecret, finalTotal, t]);
-
   return (
     <form onSubmit={handleSubmit}>
       <div className="mock-stripe-container">
@@ -170,27 +106,15 @@ const PaymentForm = ({
               borderRadius: "10px",
             }}
           >
-            {walletAvailable && paymentRequest ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <PaymentRequestButtonElement
-                  options={{
-                    paymentRequest,
-                    style: {
-                      paymentRequestButton: {
-                        type: 'buy',
-                        theme: 'dark',
-                        height: '45px',
-                      },
-                    },
-                  }}
-                />
-                <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '15px' }}>
-                  <PaymentElement />
-                </div>
-              </div>
-            ) : (
-              <PaymentElement />
-            )}
+            <PaymentElement
+              options={{
+                layout: 'tabs',
+                wallets: {
+                  applePay: 'auto',
+                  googlePay: 'auto',
+                },
+              }}
+            />
           </div>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import CartSidebar from '../components/CartSidebar';
 import '../index.css';
 
@@ -39,15 +41,21 @@ function Shop({ cart, setCart }) {
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.id === product.id && !item.isAppointment);
-    
+    const currentQty = existingItem ? existingItem.qty : 0;
+
+    if (currentQty >= product.stock) {
+      toast.error(t('eshop.stockLimitReached'));
+      return;
+    }
+
     if (existingItem) {
-      setCart(cart.map(item => 
+      setCart(cart.map(item =>
         (item.id === product.id && !item.isAppointment) ? { ...item, qty: item.qty + 1 } : item
       ));
     } else {
       setCart([...cart, { ...product, price: Number(product.price), qty: 1, isAppointment: false }]);
     }
-    setIsCartOpen(true); 
+    setIsCartOpen(true);
   };
 
   if (loading) {
@@ -110,13 +118,14 @@ function Shop({ cart, setCart }) {
         )}
       </div>
 
-      <CartSidebar 
-        isOpen={isCartOpen} 
-        setIsOpen={setIsCartOpen} 
-        cart={cart} 
-        setCart={setCart} 
+      <CartSidebar
+        isOpen={isCartOpen}
+        setIsOpen={setIsCartOpen}
+        cart={cart}
+        setCart={setCart}
       />
 
+      <ToastContainer position="top-right" autoClose={3000} />
     </div>
   );
 }

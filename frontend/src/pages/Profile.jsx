@@ -5,6 +5,16 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useTranslation } from 'react-i18next';
 
+const timeToMinutes = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const minutesToTime = (totalMinutes) => {
+  const hours = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+  const minutes = (totalMinutes % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -21,7 +31,9 @@ export default function Profile() {
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [editUserData, setEditUserData] = useState({ email: '', phone: '' });
 
-  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, aptId: null, date: '', time: '' });
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, aptId: null, date: '', time: '', duration: 60, originalDate: '', originalTime: '' });
+  const [rescheduleAvailableTimes, setRescheduleAvailableTimes] = useState([]);
+  const [loadingRescheduleTimes, setLoadingRescheduleTimes] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -33,13 +45,13 @@ export default function Profile() {
   const getAuthHeaders = () => {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('token')}` // Βεβαιώσου ότι το όνομα του token είναι σωστό ('token' ή ό,τι έχεις βάλει στο login)
+      'Authorization': `Bearer ${localStorage.getItem('userToken')}`
     };
   };
 
   const fetchData = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/user/history/${user.id}`);
+      const res = await fetch(`${API_URL}/api/user/history/${user.id}`, { headers: getAuthHeaders() });
       const data = await res.json();
       setHistory(data);
     } catch (err) {
@@ -108,27 +120,76 @@ export default function Profile() {
       return;
     }
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
-    setRescheduleModal({ isOpen: true, aptId: apt.id, date: apt.appointment_date.slice(0,10), time: apt.appointment_time.slice(0,5) });
+    const originalDate = apt.appointment_date.slice(0, 10);
+    const originalTime = apt.appointment_time.slice(0, 5);
+    setRescheduleModal({
+      isOpen: true,
+      aptId: apt.id,
+      date: originalDate,
+      time: originalTime,
+      duration: parseInt(apt.duration) || 60,
+      originalDate,
+      originalTime
+    });
   };
+
+  useEffect(() => {
+    if (!rescheduleModal.isOpen || !rescheduleModal.date) return;
+
+    setLoadingRescheduleTimes(true);
+    fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`)
+      .then(res => res.json())
+      .then(bookedSlots => {
+        // Εξαιρούμε την τρέχουσα ώρα του ίδιου του ραντεβού, ώστε να μη μπλοκάρει τον εαυτό του
+        const relevantSlots = rescheduleModal.date === rescheduleModal.originalDate
+          ? bookedSlots.filter(b => b.time !== rescheduleModal.originalTime)
+          : bookedSlots;
+
+        const startDay = timeToMinutes("09:00");
+        const endDay = timeToMinutes("21:00");
+        const now = new Date();
+        const isToday = rescheduleModal.date === now.toISOString().slice(0, 10);
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        const freeSlots = [];
+        for (let minutes = startDay; minutes < endDay; minutes += 30) {
+          if (isToday && minutes <= currentMinutes) continue;
+
+          const proposedStart = minutes;
+          const proposedEnd = minutes + rescheduleModal.duration;
+          if (proposedEnd > endDay) continue;
+
+          const overlaps = relevantSlots.some(booked => {
+            if (!booked.time) return false;
+            const bookedStart = timeToMinutes(booked.time);
+            const bookedEnd = bookedStart + booked.duration;
+            return proposedStart < bookedEnd && proposedEnd > bookedStart;
+          });
+
+          if (!overlaps) freeSlots.push(minutesToTime(proposedStart));
+        }
+
+        setRescheduleAvailableTimes(freeSlots);
+        setLoadingRescheduleTimes(false);
+      })
+      .catch(() => setLoadingRescheduleTimes(false));
+  }, [rescheduleModal.isOpen, rescheduleModal.date, rescheduleModal.duration, rescheduleModal.originalDate, rescheduleModal.originalTime]);
 
   const submitReschedule = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`);
-      const bookedSlots = await res.json();
-      
       const response = await fetch(`${API_URL}/api/appointments/${rescheduleModal.aptId}`, {
         method: 'PUT',
         headers: getAuthHeaders(), // Έλειπε το Token!
-        body: JSON.stringify({ 
-          appointment_date: rescheduleModal.date, 
-          appointment_time: rescheduleModal.time 
+        body: JSON.stringify({
+          appointment_date: rescheduleModal.date,
+          appointment_time: rescheduleModal.time
         })
       });
 
       if (response.ok) {
         toast.success(t('profile.toastRescheduled'));
-        setRescheduleModal({ isOpen: false, aptId: null, date: '', time: '' });
+        setRescheduleModal({ isOpen: false, aptId: null, date: '', time: '', duration: 60, originalDate: '', originalTime: '' });
         fetchData();
       } else {
         const errData = await response.json();
@@ -272,14 +333,26 @@ export default function Profile() {
         <div className="pro-modal-overlay">
           <div className="pro-modal">
             <h3>{t('profile.rescheduleTitle')}</h3>
-            <input type="date" className="pro-input" value={rescheduleModal.date} onChange={(e) => setRescheduleModal({...rescheduleModal, date: e.target.value})} />
+            <input
+              type="date"
+              className="pro-input"
+              min={new Date().toISOString().slice(0, 10)}
+              value={rescheduleModal.date}
+              onChange={(e) => setRescheduleModal({ ...rescheduleModal, date: e.target.value, time: '' })}
+            />
             <div className="time-slots-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '15px' }}>
-              {['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'].map(time => (
-                <button key={time} className={`time-slot ${rescheduleModal.time === time ? 'selected' : ''}`} onClick={() => setRescheduleModal({...rescheduleModal, time})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd', background: rescheduleModal.time === time ? '#bc9c82' : '#fff' }}>{time}</button>
-              ))}
+              {loadingRescheduleTimes ? (
+                <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#8c7a6b' }}>{t('profile.rescheduleLoadingTimes')}</p>
+              ) : rescheduleAvailableTimes.length === 0 ? (
+                <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#8c7a6b' }}>{t('profile.rescheduleNoTimes')}</p>
+              ) : (
+                rescheduleAvailableTimes.map(time => (
+                  <button key={time} type="button" className={`time-slot ${rescheduleModal.time === time ? 'selected' : ''}`} onClick={() => setRescheduleModal({ ...rescheduleModal, time })} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #ddd', background: rescheduleModal.time === time ? '#bc9c82' : '#fff' }}>{time}</button>
+                ))
+              )}
             </div>
             <div className="pro-modal-actions">
-              <button className="pro-btn primary" onClick={submitReschedule} disabled={loading}>{loading ? '...' : t('profile.confirm')}</button>
+              <button className="pro-btn primary" onClick={submitReschedule} disabled={loading || !rescheduleModal.time}>{loading ? '...' : t('profile.confirm')}</button>
               <button className="pro-btn secondary" onClick={() => setRescheduleModal({...rescheduleModal, isOpen: false})}>{t('profile.cancelSmall')}</button>
             </div>
           </div>

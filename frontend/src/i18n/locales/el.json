@@ -74,6 +74,7 @@
     "allCategories": "Όλες οι κατηγορίες",
     "noProducts": "Δεν βρέθηκαν προϊόντα.",
     "soldOut": "Εξαντλήθηκε",
+    "stockLimitReached": "Δεν υπάρχει άλλο διαθέσιμο απόθεμα για αυτό το προϊόν.",
     "addToCart": "Προσθήκη"
   },
   "cart": {
@@ -189,6 +190,8 @@
     "orderNumber": "Παραγγελία",
     "cancelOrder": "Ακύρωση Παραγγελίας",
     "rescheduleTitle": "Επιλογή νέας ώρας",
+    "rescheduleLoadingTimes": "Φόρτωση διαθέσιμων ωρών...",
+    "rescheduleNoTimes": "Δεν υπάρχουν διαθέσιμες ώρες για αυτή την ημέρα.",
     "confirm": "Επιβεβαίωση",
     "cancelSmall": "Άκυρο",
     "cancelApptTitle": "Ακύρωση Ραντεβού",

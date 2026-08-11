@@ -6,10 +6,12 @@ function CartSidebar({ isOpen, setIsOpen, cart, setCart }) {
   const { t } = useTranslation();
 
   const updateCartQuantity = (id, delta) => {
-    setCart(prevCart => 
-      prevCart.map(item => 
-        item.id === id ? { ...item, qty: Math.max(0, item.qty + delta) } : item
-      ).filter(item => item.qty > 0)
+    setCart(prevCart =>
+      prevCart.map(item => {
+        if (item.id !== id) return item;
+        const maxQty = item.isAppointment || !item.stock ? Infinity : item.stock;
+        return { ...item, qty: Math.max(0, Math.min(item.qty + delta, maxQty)) };
+      }).filter(item => item.qty > 0)
     );
   };
 
@@ -34,7 +36,13 @@ function CartSidebar({ isOpen, setIsOpen, cart, setCart }) {
                   <div className="d-flex align-items-center gap-2 mt-2">
                     <button onClick={() => updateCartQuantity(item.id, -1)} className="btn btn-sm btn-outline-secondary">-</button>
                     <span>{item.qty}</span>
-                    <button onClick={() => updateCartQuantity(item.id, 1)} className="btn btn-sm btn-outline-secondary">+</button>
+                    <button
+                      onClick={() => updateCartQuantity(item.id, 1)}
+                      className="btn btn-sm btn-outline-secondary"
+                      disabled={!item.isAppointment && item.stock && item.qty >= item.stock}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
                 <div style={{ fontWeight: 'bold', color: '#3b2b1f', marginRight: '15px' }}>

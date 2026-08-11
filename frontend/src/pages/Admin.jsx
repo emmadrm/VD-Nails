@@ -324,7 +324,7 @@ export default function Admin() {
     e.preventDefault();
     triggerConfirm("Ενημέρωση Κράτησης", "Είστε σίγουροι για την τροποποίηση αυτού του ραντεβού;", async () => {
       try {
-        const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}`, {
+        const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}/details`, {
           method: 'PUT',
           headers: getJsonHeaders(),
           body: JSON.stringify({
@@ -333,11 +333,14 @@ export default function Admin() {
             appointment_time: editingApt.appointment_time.slice(0, 5), service_name: editingApt.service_name
           })
         });
-        if (!res.ok) throw new Error("Σφάλμα");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Σφάλμα ενημέρωσης ραντεβού.");
+        }
         toast.success("Το ραντεβού ενημερώθηκε!");
         setEditingApt(null);
         fetchAppointments();
-      } catch (err) { toast.error("Σφάλμα ενημέρωσης ραντεβού."); }
+      } catch (err) { toast.error(err.message || "Σφάλμα ενημέρωσης ραντεβού."); }
     });
   };
 
@@ -383,7 +386,8 @@ export default function Admin() {
           fetchAppointments();
           setActiveTab('appointments');
         } else {
-          toast.error("Κάτι πήγε λάθος.");
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || "Κάτι πήγε λάθος.");
         }
       } catch (err) { toast.error("Σφάλμα σύνδεσης με server."); }
     });
@@ -415,13 +419,16 @@ export default function Admin() {
             duration: service.duration_minutes
           })
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Σφάλμα κατά την καταχώρηση του ραντεβού.");
+        }
         toast.success("Το ραντεβού καταχωρήθηκε!");
         setShowBookingForm(false);
         setBookingForm({ userId: '', serviceId: '', time: '10:00' });
         setClientSearchTerm('');
         fetchAppointments();
-      } catch (err) { toast.error("Σφάλμα κατά την καταχώρηση του ραντεβού."); }
+      } catch (err) { toast.error(err.message || "Σφάλμα κατά την καταχώρηση του ραντεβού."); }
     });
   };
 

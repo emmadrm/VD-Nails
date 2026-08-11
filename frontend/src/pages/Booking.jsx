@@ -83,7 +83,8 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
         if (saveRes.ok) {
           navigate('/success', { state: { isAppointment: true } });
         } else {
-          setStripeError(t('booking.errorRegistration'));
+          const errData = await saveRes.json().catch(() => ({}));
+          setStripeError(errData.error || t('booking.errorRegistration'));
         }
       }
     } catch (err) {

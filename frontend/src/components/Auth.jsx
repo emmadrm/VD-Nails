@@ -37,6 +37,7 @@ export default function Auth() {
       if (res.ok) {
         // Επιτυχία: Αποθηκεύουμε τον χρήστη και τον πάμε εκεί που ήθελε αρχικά (ή στο προφίλ του)
         localStorage.setItem('vd_user', JSON.stringify(data.user));
+        localStorage.setItem('userToken', data.token);
         navigate(location.state?.from || '/profile');
         window.location.reload(); // Ανανέωση για να ενημερωθεί το Header
       } else {

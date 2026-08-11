@@ -16,6 +16,7 @@ const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const app = express();
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε ξανά μετά από 15 λεπτά." } });
+const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε ξανά μετά από 15 λεπτά." } });
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: "Πολλά αιτήματα από αυτή την IP." } });
 const cloudinary = require('cloudinary').v2;
 const cloudinaryStorage = require('multer-storage-cloudinary');
@@ -45,7 +46,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(express.json());
 app.use('/api/', apiLimiter);
 app.use('/api/login', loginLimiter);
-app.use('/api/admin/login', loginLimiter);
+app.use('/api/admin/login', adminLoginLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/', (req, res) => { res.send('Το Backend του VD Nails λειτουργεί τέλεια! 🚀'); });
 
@@ -73,7 +74,30 @@ const verifyToken = (req, res, next) => {
     }
 
     req.user = decoded;
-    next(); 
+    next();
+  });
+};
+
+const verifyOwnUser = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Δεν παρέχεται token πρόσβασης (Unauthorized)" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ error: "Μη έγκυρο ή ληγμένο token (Forbidden)" });
+    }
+
+    const targetId = req.params.id || req.params.userId;
+    if (String(decoded.id) !== String(targetId)) {
+      return res.status(403).json({ error: "Δεν έχετε πρόσβαση σε αυτόν τον πόρο." });
+    }
+
+    req.user = decoded;
+    next();
   });
 };
 
@@ -173,30 +197,89 @@ app.get('/api/admin/orders', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
-app.post('/api/appointments/direct', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_method, duration } = req.body;
+app.post('/api/admin/orders/update-shipment', verifyAdmin, async (req, res) => {
+  const { saleId, shipped } = req.body;
   try {
+    await pool.query('UPDATE orders SET shipped = $1 WHERE id = $2', [shipped, saleId]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+const timeToMinutes = (timeStr) => {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const getEffectiveDuration = async (serviceName, ownDuration) => {
+  if (ownDuration) return parseInt(ownDuration);
+  const svc = await pool.query('SELECT duration_minutes FROM services WHERE name = $1', [serviceName]);
+  return svc.rows[0] ? parseInt(svc.rows[0].duration_minutes) : 60;
+};
+
+const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = null) => {
+  const startMinutes = timeToMinutes(time);
+  const endMinutes = startMinutes + durationMinutes;
+
+  const query = `
+    SELECT a.appointment_time, COALESCE(a.duration, s.duration_minutes, 60) as duration_minutes
+    FROM appointments a
+    LEFT JOIN services s ON a.service_name = s.name
+    WHERE a.appointment_date = $1 AND a.status != 'cancelled'${excludeId ? ' AND a.id != $2' : ''}`;
+  const params = excludeId ? [date, excludeId] : [date];
+  const result = await pool.query(query, params);
+
+  return result.rows.some(row => {
+    const existingStart = timeToMinutes(row.appointment_time.slice(0, 5));
+    const existingEnd = existingStart + (parseInt(row.duration_minutes) || 60);
+    return startMinutes < existingEnd && existingStart < endMinutes;
+  });
+};
+
+app.get('/api/appointments/check-availability', async (req, res) => {
+  const { date, time, service_name, duration } = req.query;
+  try {
+    const effectiveDuration = await getEffectiveDuration(service_name, duration);
+    const overlap = await hasAppointmentOverlap(date, time, effectiveDuration);
+    res.json({ available: !overlap });
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.post('/api/appointments/direct', async (req, res) => {
+  const { user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_method, duration, stripe_payment_intent_id } = req.body;
+  try {
+    const effectiveDuration = await getEffectiveDuration(service_name, duration);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration);
+
+    if (overlap) {
+      if (stripe_payment_intent_id) {
+        try { await stripe.refunds.create({ payment_intent: stripe_payment_intent_id }); }
+        catch (refundErr) { console.error('Refund failed:', refundErr); }
+        return res.status(409).json({ error: "Η ώρα καταλήφθηκε λίγο πριν ολοκληρωθεί η πληρωμή σας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." });
+      }
+      return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι πλέον διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
+    }
+
     let paymentTypeStr = payment_method === 'prepay_success' ? 'Online Πληρωμή (Κάρτα)' : 'Πληρωμή στο Κατάστημα';
 
     const query = `
-      INSERT INTO appointments 
-      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+      INSERT INTO appointments
+      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id`;
 
     const values = [
-      user_id || null, 
-      client_name, 
-      client_email, 
-      client_phone, 
-      service_name, 
-      service_price, 
-      appointment_date, 
-      appointment_time, 
-      paymentTypeStr, 
-      'completed', 
-      'confirmed', 
-      duration || null 
+      user_id || null,
+      client_name,
+      client_email,
+      client_phone,
+      service_name,
+      service_price,
+      appointment_date,
+      appointment_time,
+      paymentTypeStr,
+      'completed',
+      'confirmed',
+      effectiveDuration
     ];
 
     const result = await pool.query(query, values);
@@ -229,17 +312,6 @@ app.put('/api/appointments/:id/status', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/appointments', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, service_name, appointment_date, appointment_time, amount_paid, payment_type, stripe_id } = req.body;
-  try {
-    const result = await pool.query(
-      `INSERT INTO appointments (user_id, client_name, client_email, client_phone, service_name, appointment_date, appointment_time, amount_paid, payment_type, payment_status, status, stripe_payment_intent_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed', 'confirmed', $10) RETURNING id`,
-      [user_id || null, client_name, client_email, client_phone, service_name, appointment_date, appointment_time, amount_paid, payment_type, stripe_id]
-    );
-    res.json({ success: true, appointmentId: result.rows[0].id });
-  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
-});
-
 app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM appointments ORDER BY appointment_date DESC, appointment_time DESC');
@@ -249,9 +321,32 @@ app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
 
 app.put('/api/appointments/:id', async (req, res) => {
   const { id } = req.params;
-  const { appointment_date, appointment_time } = req.body; 
+  const { appointment_date, appointment_time } = req.body;
   try {
+    const existing = await pool.query('SELECT service_name, duration FROM appointments WHERE id = $1', [id]);
+    if (existing.rows.length === 0) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
+
+    const effectiveDuration = await getEffectiveDuration(existing.rows[0].service_name, existing.rows[0].duration);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
+    if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
+
     await pool.query('UPDATE appointments SET appointment_date=$1, appointment_time=$2 WHERE id=$3', [appointment_date, appointment_time, id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { client_name, client_phone, client_email, service_name, appointment_date, appointment_time } = req.body;
+  try {
+    const effectiveDuration = await getEffectiveDuration(service_name, null);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
+    if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
+
+    await pool.query(
+      'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7 WHERE id=$8',
+      [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, id]
+    );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -278,7 +373,7 @@ app.get('/api/products/categories', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
-app.post('/api/products', upload.single('image'), async (req, res) => {
+app.post('/api/products', verifyAdmin, upload.single('image'), async (req, res) => {
   const { name, description, price, stock, category } = req.body;
   // Το req.file.path είναι πλέον το μόνιμο URL από το Cloudinary!
   const image_url = req.file ? req.file.path : null;
@@ -291,7 +386,7 @@ app.post('/api/products', upload.single('image'), async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/products/:id', upload.single('image'), async (req, res) => {
+app.put('/api/products/:id', verifyAdmin, upload.single('image'), async (req, res) => {
   const { id } = req.params;
   const { name, description, price, stock, category } = req.body;
   try {
@@ -354,7 +449,9 @@ app.post('/api/register', async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(`INSERT INTO users (name, email, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, phone`, [name, email, phone, passwordHash]);
-    res.json({ success: true, user: result.rows[0] });
+    const user = result.rows[0];
+    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ success: true, token, user });
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
@@ -364,7 +461,8 @@ app.post('/api/login', async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0 || !(await bcrypt.compare(password, result.rows[0].password_hash))) return res.status(400).json({ error: "Λάθος email ή κωδικός." });
     const user = result.rows[0];
-    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, phone: user.phone } });
+    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ success: true, token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone } });
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
@@ -434,14 +532,14 @@ app.post('/api/reset-password', async (req, res) => {
   }
 });
 
-app.get('/api/user/history/:userId', async (req, res) => {
+app.get('/api/user/history/:userId', verifyOwnUser, async (req, res) => {
   try {
     const apts = await pool.query("SELECT * FROM appointments WHERE user_id = $1 ORDER BY appointment_date DESC", [req.params.userId]);
     const ords = await pool.query("SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC", [req.params.userId]);
     res.json({ appointments: apts.rows, orders: ords.rows });
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
-app.put('/api/user/:id', async (req, res) => {
+app.put('/api/user/:id', verifyOwnUser, async (req, res) => {
   const { id } = req.params;
   const { email, phone } = req.body;
   try {

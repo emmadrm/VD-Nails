@@ -1,5 +1,10 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// Το DATE column επιστρέφεται ως ωμό string 'YYYY-MM-DD' αντί για JS Date,
+// ώστε να μην εφαρμόζεται μετατροπή ζώνης ώρας (η προεπιλογή του pg μετατοπίζει
+// την ημερομηνία κατά μία μέρα σε ζώνες ώρας μπροστά από UTC, π.χ. Europe/Athens).
+types.setTypeParser(1082, (val) => val);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -128,6 +133,5 @@ const initDatabase = async () => {
   }
 };
 
-initDatabase();
-
 module.exports = pool;
+module.exports.initDatabase = initDatabase;

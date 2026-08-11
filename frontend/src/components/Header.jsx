@@ -43,6 +43,7 @@ function Header({ cart, setCart }) {
 
   const handleLogout = () => {
     localStorage.removeItem('vd_user');
+    localStorage.removeItem('userToken');
     setUser(null);
     setShowDropdown(false);
     navigate('/');

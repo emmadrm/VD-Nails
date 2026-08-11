@@ -38,8 +38,48 @@ function ScrollToTop() {
   return null;
 }
 
-function App() {
+function CookieGate() {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
+
+  const hideCookieModal = pathname === '/privacy' || pathname === '/terms' || pathname === '/cookies';
+
+  if (hideCookieModal) return null;
+
+  return (
+    <CookieConsent
+      location="none"
+      overlay={true}
+      buttonText={t('cookieConsent.accept')}
+      declineButtonText={t('cookieConsent.decline')}
+      enableDeclineButton
+      cookieName="vdnails_gdpr_consent"
+      style={{
+        background: "#ffffff",
+        color: "#3b2b1f",
+        fontSize: "15px",
+        borderRadius: "12px",
+        maxWidth: "450px",
+        position: "fixed",
+        top: "0",
+        left: "50%",
+        transform: "translateX(-50%)",
+        boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+        textAlign: "center",
+        padding: "20px"
+      }}
+      overlayStyle={{ background: "rgba(0,0,0,0.7)" }}
+      declineButtonStyle={{ background: "#f3f4f6", color: "#495057", fontSize: "14px", fontWeight: "bold", borderRadius: "8px", padding: "10px 20px" }}
+      expires={10}
+    >
+      <h3 style={{ margin: "0 0 10px 0", fontSize: "1.3rem", color: "#3b2b1f" }}>{t('cookieConsent.title')}</h3>
+      {t('cookieConsent.text')}{' '}
+      <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", fontWeight: "bold", textDecoration: "none" }}>{t('cookieConsent.privacyLink')}</a>.
+    </CookieConsent>
+  );
+}
+
+function App() {
   const [cart, setCart] = useState(() => {
     const savedCart = localStorage.getItem('vd_nails_cart');
     return savedCart ? JSON.parse(savedCart) : [];
@@ -49,48 +89,14 @@ function App() {
     localStorage.setItem('vd_nails_cart', JSON.stringify(cart));
   }, [cart]);
 
-  const currentPath = window.location.pathname;
-  
-  const hideCookieModal = currentPath === '/privacy' || currentPath === '/terms' || currentPath === '/cookies';
-  
   return (
     <div>
       <BrowserRouter>
       <ScrollToTop />
       <Header cart={cart} setCart={setCart}/>
-      
+
       {/* ΝΕΟ ΚΕΝΤΡΙΚΟ ΠΑΡΑΘΥΡΟ ΓΙΑ COOKIES */}
-     {!hideCookieModal && (
-      <CookieConsent
-          location="none"
-          overlay={true}
-          buttonText={t('cookieConsent.accept')}
-          declineButtonText={t('cookieConsent.decline')}
-          enableDeclineButton
-          cookieName="vdnails_gdpr_consent"
-          style={{ 
-            background: "#ffffff", 
-            color: "#3b2b1f", 
-            fontSize: "15px", 
-            borderRadius: "12px",
-            maxWidth: "450px",
-            position: "fixed",
-            top: "0",
-            left: "50%",
-            transform: "translateX(-50%)",
-            boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-            textAlign: "center",
-            padding: "20px"
-          }}
-          overlayStyle={{ background: "rgba(0,0,0,0.7)" }}
-          declineButtonStyle={{ background: "#f3f4f6", color: "#495057", fontSize: "14px", fontWeight: "bold", borderRadius: "8px", padding: "10px 20px" }}
-          expires={10} 
-        >
-          <h3 style={{ margin: "0 0 10px 0", fontSize: "1.3rem", color: "#3b2b1f" }}>{t('cookieConsent.title')}</h3>
-          {t('cookieConsent.text')}{' '}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#10b981", fontWeight: "bold", textDecoration: "none" }}>{t('cookieConsent.privacyLink')}</a>.
-        </CookieConsent>
-      )}
+      <CookieGate />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />

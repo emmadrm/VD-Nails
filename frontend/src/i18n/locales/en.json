@@ -74,6 +74,7 @@
     "allCategories": "All categories",
     "noProducts": "No products found.",
     "soldOut": "Sold Out",
+    "stockLimitReached": "No more stock available for this product.",
     "addToCart": "Add to Cart"
   },
   "cart": {
@@ -189,6 +190,8 @@
     "orderNumber": "Order",
     "cancelOrder": "Cancel Order",
     "rescheduleTitle": "Choose a new time",
+    "rescheduleLoadingTimes": "Loading available times...",
+    "rescheduleNoTimes": "No available times for this day.",
     "confirm": "Confirm",
     "cancelSmall": "Cancel",
     "cancelApptTitle": "Cancel Appointment",
