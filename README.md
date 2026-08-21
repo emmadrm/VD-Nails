@@ -30,11 +30,11 @@ a booking system and providing a dashboard to the admin.
 <p> git clone https://github.com/emmadrm/VD-Nails.git </p>
 <p> cd VD-Nails </p>
 
-<b>Start Backend</b>
+<h3>Start Backend</h3>
 <p> cd backend </p>
 <p> npx nodemon server.js </p>
 
-<b>Start Frontend</b>
+<h3>Start Frontend</h3>
 <p> cd frontend </p>
 <p> npm run dev </p>
 
