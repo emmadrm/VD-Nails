@@ -23,22 +23,23 @@ a booking system and providing a dashboard to the admin.
 </ul>
 
 <b>Tech Stack<b>
-React, JavaScript, HTML5, CSS3
+<p> React, JavaScript, HTML5, CSS3 </p>
+
 
 # Getting Started
-git clone https://github.com/emmadrm/VD-Nails.git 
-cd VD-Nails
+<p> git clone https://github.com/emmadrm/VD-Nails.git </p>
+<p> cd VD-Nails </p>
 
 <b>Start Backend</b>
-cd backend
-npx nodemon server.js
+<p> cd backend </p>
+<p> npx nodemon server.js </p>
 
 <b>Start Frontend</b>
-cd frontend
-npm run dev
+<p> cd frontend </p>
+<p> npm run dev </p>
 
 <img width="417" height="572" alt="Screenshot 2026-08-21 203428" src="https://github.com/user-attachments/assets/a6b805b5-6645-4faf-877e-939d2c44d32c" />
-<img width="600" height="500" alt="Screenshot 2026-08-21 203340" src="https://github.com/user-attachments/assets/5d9bc255-06b3-4691-891f-82bd715300db" />
-<img width="600" height="400" alt="Screenshot 2026-08-21 203356" src="https://github.com/user-attachments/assets/97926862-ba5b-4319-a2d2-befcbb0223c5" />
+<img width="500" height="300" alt="Screenshot 2026-08-21 203340" src="https://github.com/user-attachments/assets/5d9bc255-06b3-4691-891f-82bd715300db" />
+<img width="500" height="300" alt="Screenshot 2026-08-21 203356" src="https://github.com/user-attachments/assets/97926862-ba5b-4319-a2d2-befcbb0223c5" />
 
 
