@@ -631,15 +631,16 @@ export default function Admin() {
                         </td>
                         <td data-label="Tracking BoxNow">
                           {isShipped ? (
-                            <div style={{ display: 'flex', gap: 6, minWidth: 200 }}>
+                            <div style={{ display: 'flex', gap: 6, width: '100%', maxWidth: 260 }}>
                               <input
                                 type="text"
                                 className="admin-input"
                                 placeholder="Link παρακολούθησης…"
+                                style={{ flex: 1, minWidth: 0 }}
                                 value={trackingDrafts[order.id] ?? order.tracking_link ?? ''}
                                 onChange={e => setTrackingDrafts({ ...trackingDrafts, [order.id]: e.target.value })}
                               />
-                              <button className="admin-icon-btn admin-icon-btn--success" title="Αποθήκευση" onClick={() => handleSaveTrackingLink(order.id)}>
+                              <button className="admin-icon-btn admin-icon-btn--success" title="Αποθήκευση" style={{ flexShrink: 0 }} onClick={() => handleSaveTrackingLink(order.id)}>
                                 <IconCheck size={14} />
                               </button>
                             </div>

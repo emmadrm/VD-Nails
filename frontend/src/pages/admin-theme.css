@@ -159,8 +159,6 @@
 .admin-grid { display: grid; gap: 22px; }
 .admin-grid-2fr1fr { grid-template-columns: 1fr; }
 .admin-grid-2fr1fr.split { grid-template-columns: 2fr 1fr; }
-.admin-grid-1fr2fr { grid-template-columns: 1fr; }
-.admin-grid-1fr2fr.split { grid-template-columns: 380px 1fr; }
 .admin-grid-form-list { grid-template-columns: 1fr; }
 .admin-grid-form-list.split { grid-template-columns: 340px 1fr; }
 .admin-grid-2col { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
@@ -168,7 +166,6 @@
 
 @media (max-width: 1100px) {
   .admin-grid-2fr1fr.split,
-  .admin-grid-1fr2fr.split,
   .admin-grid-form-list.split { grid-template-columns: 1fr; }
 }
 
@@ -197,8 +194,6 @@
   gap: 12px;
 }
 
-.admin-card-accent { border-top: 3px solid var(--accent); }
-
 /* ---------- Buttons ---------- */
 
 .admin-btn {
@@ -224,15 +219,6 @@
 
 .admin-btn-secondary { background: var(--surface); color: var(--ink-soft); border-color: var(--line); }
 .admin-btn-secondary:hover:not(:disabled) { background: var(--line-soft); }
-
-.admin-btn-danger { background: var(--danger-bg); color: var(--danger); }
-.admin-btn-danger:hover:not(:disabled) { background: #f9d8d8; }
-
-.admin-btn-success { background: var(--success-bg); color: var(--success); }
-.admin-btn-success:hover:not(:disabled) { background: #d9f4e3; }
-
-.admin-btn-ghost { background: transparent; color: var(--ink-soft); }
-.admin-btn-ghost:hover:not(:disabled) { background: var(--line-soft); }
 
 .admin-btn-sm { padding: 6px 11px; font-size: 0.78rem; }
 .admin-btn-block { width: 100%; }
@@ -346,8 +332,6 @@
 .admin-badge-neutral { background: var(--line-soft); color: var(--ink-soft); }
 .admin-badge-success { background: var(--success-bg); color: var(--success); }
 .admin-badge-danger { background: var(--danger-bg); color: var(--danger); }
-.admin-badge-warning { background: var(--warning-bg); color: var(--warning); }
-.admin-badge-info { background: var(--info-bg); color: var(--info); }
 .admin-badge-brand { background: var(--primary-soft); color: var(--primary); }
 
 .admin-select-status {
@@ -407,13 +391,15 @@
 
 .admin-list-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line-soft);
   font-size: 0.87rem;
 }
+.admin-list-row > * { min-width: 0; }
 .admin-list-row:last-child { border-bottom: none; }
 .admin-list-rank { color: var(--ink-muted); font-weight: 700; font-size: 0.8rem; margin-right: 4px; }
 
@@ -754,8 +740,10 @@
 
   .admin-form-row { flex-direction: column; }
   .admin-grid-kpi { grid-template-columns: 1fr 1fr; }
+  .admin-grid-2col { grid-template-columns: 1fr; }
 
-  /* Πίνακες -> κάρτες σε στενές οθόνες */
+  /* Πίνακες -> κάρτες σε στενές οθόνες. Το label πάει ΠΑΝΩ από την τιμή (όχι δίπλα-δίπλα)
+     ώστε πολυστοιχειακά κελιά (π.χ. όνομα+τηλέφωνο, input+κουμπί) να μην ξεχειλίζουν. */
   .admin-table-wrap { overflow-x: visible; }
   .admin-table, .admin-table tbody { display: block; width: 100%; }
   .admin-table thead { display: none; }
@@ -767,26 +755,24 @@
     padding: 6px 14px;
   }
   .admin-table td {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
+    display: block;
     width: 100%;
+    max-width: 100%;
     padding: 9px 0;
     border-bottom: 1px dashed var(--line-soft);
-    text-align: right;
+    text-align: left !important;
+    box-sizing: border-box;
   }
   .admin-table td:last-child { border-bottom: none; }
   .admin-table td::before {
     content: attr(data-label);
+    display: block;
     font-weight: 700;
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--ink-muted);
-    text-align: left;
-    margin-right: 12px;
-    flex-shrink: 0;
+    margin-bottom: 4px;
   }
 
   /* Εβδομαδιαίο ημερολόγιο -> οριζόντιο scroll */
