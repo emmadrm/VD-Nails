@@ -28,11 +28,11 @@
     "contactTitle": "Contact",
     "address": "13 Pentelis Str, Agia Paraskevi 15343",
     "copyright": "VD Nails. All rights reserved.",
-    "sslNote": "🔒 Secure payments via SSL encryption"
+    "sslNote": "Secure payments via SSL encryption"
   },
   "home": {
     "eyebrow": "",
-    "title": "Beauty in your hands",
+    "title": "Nail Care at Your Fingertips",
     "subtitle": "Professional nail care, nail art and beauty products — book your appointment online in seconds.",
     "cta": "Book Appointment",
     "stepsEyebrow": "How it works",
@@ -89,6 +89,10 @@
     "phonePlaceholder": "Phone *",
     "emailPlaceholder": "Email *",
     "selectService": "Select a service",
+    "selectServices": "Select services (you can pick more than one)",
+    "servicesSelected": "services selected",
+    "total": "Total",
+    "errorNoService": "Please select at least one service.",
     "selectDate": "Choose a day",
     "availableTimes": "Available Times",
     "searching": "Searching...",
@@ -149,6 +153,7 @@
     "phone": "Phone",
     "email": "Email",
     "instagram": "Instagram",
+    "tiktok": "TikTok",
     "googleMaps": "Google Maps",
     "appleMaps": "Apple Maps"
   },
@@ -214,7 +219,7 @@
     "thankYou": "Thank you!",
     "appointmentMsg": "Your booking was completed successfully.",
     "orderMsg": "Your order was completed successfully.",
-    "appointmentDetails": "You will soon receive a confirmation email with your appointment details and visit instructions. We can't wait to see you!",
+    "appointmentDetails": "You will soon receive a confirmation SMS with your appointment details. We can't wait to see you!",
     "orderDetails": "You will soon receive a confirmation email with your shipping details via BoxNow.",
     "backHome": "Back to Home",
     "backShop": "Back to the Store",
@@ -225,7 +230,7 @@
     "backHome": "Back to Home"
   },
   "cookieConsent": {
-    "title": "🍪 Cookie Settings",
+    "title": "Cookie Settings",
     "text": "We use cookies to improve your experience in our store. You can read more in our",
     "privacyLink": "Privacy Policy",
     "accept": "Accept All",
@@ -280,7 +285,7 @@
       "s3Title": "3. Who do we share your data with?",
       "s3Body": "We <strong>do not sell or share</strong> your personal data with third parties for advertising purposes. Your data is only accessible to partners who help us provide our services, under their own privacy policies:",
       "s3Li1": "<strong>BoxNow:</strong> For parcel delivery.",
-      "s3Li2": "<strong>Brevo:</strong> For sending order and appointment confirmation emails.",
+      "s3Li2": "<strong>Brevo:</strong> For sending order confirmation emails and appointment confirmation SMS.",
       "s3Li3": "<strong>Stripe:</strong> For secure processing of online card payments. VD Nails never stores your card details — these are handled exclusively by Stripe.",
       "s4Title": "4. How do we protect your data?",
       "s4Body": "We have taken strict technical measures:",

@@ -11,7 +11,8 @@ export default function Contact() {
   const appleMapsLink = `http://maps.apple.com/?daddr=${encodedAddress}`;
   const mapEmbedUrl = `https://maps.google.com/maps?q=${encodedAddress}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
   const instagramLink = "https://instagram.com/vdnailsart"; 
-
+  const tiktokLink = "https://tiktok.com/@vdnailsart";
+  
   return (
     <div className="booking-wrapper">
       <div className="compact-split-card">
@@ -69,6 +70,18 @@ export default function Contact() {
               <div className="detail-text">
                 <strong>{t('contact.instagram')}</strong>
                 <a href={instagramLink} target="_blank" rel="noopener noreferrer" className="insta-link">@vdnailsart</a>
+              </div>
+            </div>
+
+            <div className="detail-row">
+              <div className="svg-icon-container">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 7.917v4.034a9.948 9.948 0 0 1 -5 -1.951v6.5a6.5 6.5 0 1 1 -8 -6.326v4.326a2.5 2.5 0 1 0 4 2v-14.5h4.083a6.005 6.005 0 0 0 4.917 5.917z"></path>
+                </svg>
+              </div>
+              <div className="detail-text">
+                <strong>{t('contact.tiktok')}</strong>
+                <a href={tiktokLink} target="_blank" rel="noopener noreferrer" className="insta-link">@vdnailsart</a>
               </div>
             </div>
 

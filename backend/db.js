@@ -46,6 +46,7 @@ const initDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_link TEXT;`);
 
     // 3. ΠΙΝΑΚΑΣ: Ραντεβού
     await pool.query(`
@@ -88,6 +89,17 @@ const initDatabase = async () => {
         slot_time TIME NOT NULL,
         is_booked BOOLEAN DEFAULT FALSE,
         UNIQUE(slot_date, slot_time)
+      );
+    `);
+
+    // 5b. ΠΙΝΑΚΑΣ: Ειδικό Ωράριο Λειτουργίας ανά Ημερομηνία (override του προεπιλεγμένου ωραρίου)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS business_hours (
+        id SERIAL PRIMARY KEY,
+        date DATE NOT NULL UNIQUE,
+        open_time TIME NOT NULL,
+        close_time TIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 

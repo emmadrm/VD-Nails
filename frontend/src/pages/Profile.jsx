@@ -137,16 +137,18 @@ export default function Profile() {
     if (!rescheduleModal.isOpen || !rescheduleModal.date) return;
 
     setLoadingRescheduleTimes(true);
-    fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`)
-      .then(res => res.json())
-      .then(bookedSlots => {
+    Promise.all([
+      fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`).then(res => res.json()),
+      fetch(`${API_URL}/api/business-hours/${rescheduleModal.date}`).then(res => res.json())
+    ])
+      .then(([bookedSlots, businessHours]) => {
         // Εξαιρούμε την τρέχουσα ώρα του ίδιου του ραντεβού, ώστε να μη μπλοκάρει τον εαυτό του
         const relevantSlots = rescheduleModal.date === rescheduleModal.originalDate
           ? bookedSlots.filter(b => b.time !== rescheduleModal.originalTime)
           : bookedSlots;
 
-        const startDay = timeToMinutes("09:00");
-        const endDay = timeToMinutes("21:00");
+        const startDay = timeToMinutes(businessHours.open_time);
+        const endDay = timeToMinutes(businessHours.close_time);
         const now = new Date();
         const isToday = rescheduleModal.date === now.toISOString().slice(0, 10);
         const currentMinutes = now.getHours() * 60 + now.getMinutes();

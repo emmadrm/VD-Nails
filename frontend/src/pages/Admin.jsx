@@ -2,12 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import DatePicker, { registerLocale } from "react-datepicker";
+import { registerLocale } from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import el from 'date-fns/locale/el';
 import '../index.css';
+import './admin-theme.css';
+import AdminSidebar from '../components/admin/AdminSidebar';
+import ServicePicker from '../components/admin/ServicePicker';
+import ClientHistoryPanel from '../components/admin/ClientHistoryPanel';
+import WeekCalendar from '../components/admin/WeekCalendar';
+import {
+  IconSearch, IconEdit, IconTrash, IconCheck, IconX, IconClock, IconAlert, IconMenu
+} from '../components/admin/icons';
 
 registerLocale('el', el);
+
+const BLOCKED_CLIENT_NAME = "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
+const BLOCKED_LABEL = "Κλειστό / Ρεπό";
+
+const PAGE_META = {
+  appointments: { title: 'Λίστα ραντεβού', subtitle: 'Αναζήτηση, φιλτράρισμα και διαχείριση όλων των κρατήσεων.' },
+  calendar: { title: 'Ημερολόγιο', subtitle: 'Πρόγραμμα εβδομάδας, ωράριο ανά ημέρα και κλείδωμα χρόνου — όλα σε ένα σημείο.' },
+  orders: { title: 'Παραγγελίες', subtitle: 'Διαχείριση παραγγελιών του e-shop.' },
+  products: { title: 'Προϊόντα', subtitle: 'Κατάλογος και αποθέματα e-shop.' },
+  services: { title: 'Υπηρεσίες', subtitle: 'Κατάλογος υπηρεσιών, τιμές και διάρκειες.' },
+  stats: { title: 'Στατιστικά', subtitle: 'Απόδοση επιχείρησης και κορυφαίοι πελάτες.' },
+  users: { title: 'Πελάτες', subtitle: 'Εγγεγραμμένοι χρήστες και ιστορικό.' }
+};
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -24,70 +45,9 @@ export default function Admin() {
     return `${year}-${month}-${day}`;
   };
 
-  // Ημερήσιο πρόγραμμα (timeline) - ώρες καταστήματος 09:00-21:00
-  const TIMELINE_START_HOUR = 9;
-  const TIMELINE_END_HOUR = 21;
-  const PX_PER_MIN = 2.6;
-
-  const timeToMinutes = (timeStr) => {
-    const [h, m] = timeStr.slice(0, 5).split(':').map(Number);
-    return h * 60 + m;
-  };
-
-  const minutesToTimeLabel = (totalMinutes) => {
-    const h = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
-    const m = (totalMinutes % 60).toString().padStart(2, '0');
-    return `${h}:${m}`;
-  };
-
-  const getAptDuration = (apt) => {
-    if (apt.duration) return parseInt(apt.duration);
-    const svc = services.find(s => s.name === apt.service_name);
-    return svc ? svc.duration_minutes : 60;
-  };
-
-  // Τοποθετεί τα ραντεβού σε στήλες ώστε τα ταυτόχρονα να εμφανίζονται το ένα δίπλα στο άλλο
-  const layoutDayAppointments = (apts) => {
-    const events = [...apts]
-      .map(apt => {
-        const start = timeToMinutes(apt.appointment_time);
-        return { apt, start, end: start + getAptDuration(apt) };
-      })
-      .sort((a, b) => a.start - b.start || a.end - b.end);
-
-    const clusters = [];
-    let current = [];
-    let currentEnd = -Infinity;
-    events.forEach(ev => {
-      if (current.length === 0 || ev.start < currentEnd) {
-        current.push(ev);
-        currentEnd = Math.max(currentEnd, ev.end);
-      } else {
-        clusters.push(current);
-        current = [ev];
-        currentEnd = ev.end;
-      }
-    });
-    if (current.length) clusters.push(current);
-
-    const result = [];
-    clusters.forEach(cluster => {
-      const columnEnds = [];
-      cluster.forEach(ev => {
-        let col = columnEnds.findIndex(endTime => ev.start >= endTime);
-        if (col === -1) { col = columnEnds.length; columnEnds.push(ev.end); }
-        else { columnEnds[col] = ev.end; }
-        ev.col = col;
-      });
-      const totalCols = columnEnds.length;
-      cluster.forEach(ev => result.push({ ...ev, totalCols }));
-    });
-
-    return result;
-  };
-
   // State για το Καθολικό Modal Επιβεβαίωσης
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Tabs
   const [activeTab, setActiveTab] = useState('appointments');
@@ -97,21 +57,23 @@ export default function Admin() {
   const [services, setServices] = useState([]);
   const [users, setUsers] = useState([]);
 
-  // Ημερολόγιο
-  const [selectedCalendarDay, setSelectedCalendarDay] = useState(new Date());
-  const [showBookingForm, setShowBookingForm] = useState(false);
-  const [bookingForm, setBookingForm] = useState({ userId: '', serviceId: '', time: '10:00' });
-  const [clientSearchTerm, setClientSearchTerm] = useState('');
-
   // Ιστορικό Χρηστών
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [selectedUserHistory, setSelectedUserHistory] = useState(null);
   const [loadingUserHistory, setLoadingUserHistory] = useState(false);
 
+  // Ιστορικό πελάτισσας βάσει τηλεφώνου (από Ραντεβού/Ημερολόγιο, καλύπτει και guest κρατήσεις)
+  const [phoneHistory, setPhoneHistory] = useState(null);
+  const [loadingPhoneHistory, setLoadingPhoneHistory] = useState(false);
+
+  // Επιλεγμένες υπηρεσίες κατά την επεξεργασία ραντεβού (πολλαπλές υπηρεσίες)
+  const [editServices, setEditServices] = useState([]);
+
   // Φίλτρα
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [orderSearchTerm, setOrderSearchTerm] = useState(''); // Νέο state για αναζήτηση παραγγελιών
+  const [trackingDrafts, setTrackingDrafts] = useState({});
 
   // Φόρμες Διαχείρισης
   const [productForm, setProductForm] = useState({
@@ -124,12 +86,8 @@ export default function Admin() {
 
   const [editingApt, setEditingApt] = useState(null);
 
-  const [blockForm, setBlockForm] = useState({
-    date: '', time: '09:00', duration: 60, reason: 'Ρεπό / Προσωπικός Χρόνος'
-  });
-
   // BI STATS
-  const [statsRange, setStatsRange] = useState('1m'); 
+  const [statsRange, setStatsRange] = useState('1m');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [salesStats, setSalesStats] = useState(null);
@@ -147,7 +105,7 @@ export default function Admin() {
   const handleAuthError = (status) => {
     if (status === 401 || status === 403) {
       localStorage.removeItem('adminToken');
-      navigate('/notfound'); 
+      navigate('/notfound');
     }
   };
 
@@ -199,7 +157,7 @@ export default function Admin() {
         setSalesStats(await salesRes.json());
         setAppointmentStats(await aptRes.json());
       }
-    } catch (err) { toast.error("Σφάλμα φόρτωσης στατιστικών."); } 
+    } catch (err) { toast.error("Σφάλμα φόρτωσης στατιστικών."); }
     finally { setLoadingStats(false); }
   };
 
@@ -252,13 +210,25 @@ export default function Admin() {
     finally { setLoadingUserHistory(false); }
   };
 
+  const fetchHistoryByPhone = async (clientName, clientPhone) => {
+    setPhoneHistory({ label: clientName, appointments: [], orders: [] });
+    setLoadingPhoneHistory(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/history-by-phone/${encodeURIComponent(clientPhone)}`, { headers: getJsonHeaders() });
+      if (!res.ok) return handleAuthError(res.status);
+      const data = await res.json();
+      setPhoneHistory({ label: clientName, ...data });
+    } catch (err) { toast.error("Σφάλμα φόρτωσης ιστορικού."); }
+    finally { setLoadingPhoneHistory(false); }
+  };
+
   // --- ΔΙΑΧΕΙΡΙΣΗ ΠΡΟΪΟΝΤΩΝ (FILE UPLOAD) ---
   const handleSaveProduct = (e) => {
     e.preventDefault();
     triggerConfirm("Αποθήκευση Προϊόντος", "Είστε σίγουροι για την προσθήκη/ενημέρωση αυτού του προϊόντος στο E-shop;", async () => {
       const isEdit = !!productForm.id;
       const url = isEdit ? `${API_URL}/api/products/${productForm.id}` : `${API_URL}/api/products`;
-      
+
       const formData = new FormData();
       formData.append('name', productForm.name);
       formData.append('description', productForm.description);
@@ -286,7 +256,7 @@ export default function Admin() {
       try {
         const res = await fetch(`${API_URL}/api/products/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success("🗑️ Το προϊόν διεγράφη.");
+        toast.success("Το προϊόν διαγράφηκε.");
         fetchProducts();
       } catch (err) { toast.error("Σφάλμα διαγραφής."); }
     });
@@ -313,7 +283,7 @@ export default function Admin() {
       try {
         const res = await fetch(`${API_URL}/api/services/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success("🗑️ Η υπηρεσία διεγράφη.");
+        toast.success("Η υπηρεσία διαγράφηκε.");
         fetchServices();
       } catch (err) { toast.error("Σφάλμα διαγραφής."); }
     });
@@ -322,6 +292,7 @@ export default function Admin() {
   // --- ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ ---
   const handleUpdateAppointment = (e) => {
     e.preventDefault();
+    if (editServices.length === 0) return toast.error("Επιλέξτε τουλάχιστον μία υπηρεσία.");
     triggerConfirm("Ενημέρωση Κράτησης", "Είστε σίγουροι για την τροποποίηση αυτού του ραντεβού;", async () => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}/details`, {
@@ -330,7 +301,7 @@ export default function Admin() {
           body: JSON.stringify({
             client_name: editingApt.client_name, client_phone: editingApt.client_phone,
             client_email: editingApt.client_email, appointment_date: formatLocalDate(editingApt.appointment_date),
-            appointment_time: editingApt.appointment_time.slice(0, 5), service_name: editingApt.service_name
+            appointment_time: editingApt.appointment_time.slice(0, 5), services: editServices
           })
         });
         if (!res.ok) {
@@ -339,9 +310,21 @@ export default function Admin() {
         }
         toast.success("Το ραντεβού ενημερώθηκε!");
         setEditingApt(null);
+        setEditServices([]);
         fetchAppointments();
       } catch (err) { toast.error(err.message || "Σφάλμα ενημέρωσης ραντεβού."); }
     });
+  };
+
+  // Ανοίγει το panel επεξεργασίας, ανασυνθέτοντας τις επιλεγμένες υπηρεσίες από το service_name (πιθανώς ενωμένο με κόμμα)
+  const openEditAppointment = (apt) => {
+    setEditingApt(apt);
+    const names = apt.service_name.split(',').map(n => n.trim());
+    const matched = names
+      .map(name => services.find(s => s.name === name))
+      .filter(Boolean)
+      .map(s => ({ name: s.name, price: Number(s.price), duration_minutes: parseInt(s.duration_minutes) }));
+    setEditServices(matched.length > 0 ? matched : [{ name: apt.service_name, price: Number(apt.service_price), duration_minutes: parseInt(apt.duration) || 60 }]);
   };
 
   const handleDeleteAppointment = (id) => {
@@ -355,88 +338,11 @@ export default function Admin() {
     });
   };
 
-  // --- ΜΠΛΟΚΑΡΙΣΜΑ ΩΡΩΝ / ΡΕΠΟ ---
-  const handleBlockTime = (e) => {
-    e.preventDefault();
-    if (!blockForm.date) return toast.error("Επιλέξτε ημερομηνία.");
-
-    triggerConfirm("Κλείδωμα Ημερολογίου", `Θα κλειδώσετε την ημέρα ${blockForm.date} στις ${blockForm.time} για ${blockForm.duration} λεπτά. Να προχωρήσω;`, async () => {
-      const payload = {
-        client_name: "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ",
-        client_email: "admin@vdnails.com",
-        client_phone: "0000000000",
-        service_name: blockForm.reason, 
-        appointment_date: blockForm.date,
-        appointment_time: blockForm.time,
-        payment_method: "store",
-        payment_status: "completed",
-        status: "confirmed", 
-        total_amount: 0,
-        duration: parseInt(blockForm.duration) 
-      };
-
-      try {
-        const res = await fetch(`${API_URL}/api/appointments/direct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          toast.success("🔒 Η ώρα/μέρα κλειδώθηκε επιτυχώς!");
-          fetchAppointments();
-          setActiveTab('appointments');
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          toast.error(errData.error || "Κάτι πήγε λάθος.");
-        }
-      } catch (err) { toast.error("Σφάλμα σύνδεσης με server."); }
-    });
-  };
-
-  // --- ΚΡΑΤΗΣΗ ΡΑΝΤΕΒΟΥ ΓΙΑ ΠΕΛΑΤΙΣΣΑ (ΑΠΟ ΗΜΕΡΟΛΟΓΙΟ) ---
-  const handleBookForClient = (e) => {
-    e.preventDefault();
-    const client = users.find(u => u.id === parseInt(bookingForm.userId));
-    const service = services.find(s => s.id === parseInt(bookingForm.serviceId));
-    if (!client || !service) return toast.error("Επιλέξτε πελάτισσα και υπηρεσία.");
-
-    const dateStr = formatLocalDate(selectedCalendarDay);
-    triggerConfirm("Νέα Κράτηση", `Κλείσιμο ραντεβού για ${client.name} στις ${dateStr.split('-').reverse().join('/')} στις ${bookingForm.time};`, async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/appointments/direct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: client.id,
-            client_name: client.name,
-            client_email: client.email,
-            client_phone: client.phone,
-            service_name: service.name,
-            service_price: service.price,
-            appointment_date: dateStr,
-            appointment_time: bookingForm.time,
-            payment_method: 'store',
-            duration: service.duration_minutes
-          })
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Σφάλμα κατά την καταχώρηση του ραντεβού.");
-        }
-        toast.success("Το ραντεβού καταχωρήθηκε!");
-        setShowBookingForm(false);
-        setBookingForm({ userId: '', serviceId: '', time: '10:00' });
-        setClientSearchTerm('');
-        fetchAppointments();
-      } catch (err) { toast.error(err.message || "Σφάλμα κατά την καταχώρηση του ραντεβού."); }
-    });
-  };
-
   // --- ΑΠΟΣΤΟΛΗ ΠΑΡΑΓΓΕΛΙΑΣ ---
   const handleShipmentToggle = (id, status) => {
     triggerConfirm("Ενημέρωση Αποστολής", `Επιβεβαιώνετε ότι η παραγγελία είναι πλέον ${status ? 'Απεσταλμένη' : 'Σε Εκκρεμότητα'};`, async () => {
       try {
-        const res = await fetch(`${API_URL}/api/admin/orders/update-shipment`, { 
+        const res = await fetch(`${API_URL}/api/admin/orders/update-shipment`, {
           method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ saleId: id, shipped: status })
         });
         if (res.ok) {
@@ -463,8 +369,8 @@ export default function Admin() {
   });
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
-      order.id.toString().includes(orderSearchTerm) || 
+    const matchesSearch =
+      order.id.toString().includes(orderSearchTerm) ||
       order.client_name.toLowerCase().includes(orderSearchTerm.toLowerCase());
     return matchesSearch;
   });
@@ -472,8 +378,8 @@ export default function Admin() {
   const updateAppointmentStatus = (id, status) => {
     triggerConfirm("Ολοκλήρωση Ραντεβού", "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", async () => {
       try {
-        const res = await fetch(`${API_URL}/api/appointments/${id}/status`, { 
-          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+        const res = await fetch(`${API_URL}/api/appointments/${id}/status`, {
+          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status })
         });
         if (res.ok) {
           toast.success("Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!");
@@ -489,8 +395,8 @@ export default function Admin() {
     }
     triggerConfirm("Αλλαγή Κατάστασης", `Θέλετε να αλλάξετε την κατάσταση της παραγγελίας; (Θα προστεθεί στα έσοδα αν επιλέξετε 'Παραλήφθηκε')`, async () => {
       try {
-        const res = await fetch(`${API_URL}/api/orders/${id}/status`, { 
-          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status }) 
+        const res = await fetch(`${API_URL}/api/orders/${id}/status`, {
+          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status })
         });
         if (res.ok) {
           toast.success("Η κατάσταση της παραγγελίας ενημερώθηκε!");
@@ -500,797 +406,637 @@ export default function Admin() {
     });
   };
 
+  const handleSaveTrackingLink = async (id) => {
+    const link = trackingDrafts[id] ?? '';
+    try {
+      const res = await fetch(`${API_URL}/api/admin/orders/${id}/tracking`, {
+        method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ tracking_link: link })
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Το link παρακολούθησης αποθηκεύτηκε!");
+      fetchOrders();
+    } catch { toast.error("Σφάλμα αποθήκευσης link."); }
+  };
+
+  const meta = PAGE_META[activeTab];
+
   return (
-    <div className="admin-wrapper" style={{ padding: '30px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-      
-      {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', marginBottom: '30px' }}>
-        <div>
-          <h1 style={{ color: '#3b2b1f', margin: 0, fontSize: '1.8rem', fontWeight: 'bold' }}>VD Nails Suite</h1>
-          <p style={{ margin: '5px 0 0 0', color: '#6c757d', fontSize: '0.9rem' }}>Καλώς ήρθες στο κέντρο ελέγχου της επιχείρησής σου.</p>
+    <div className="admin-shell">
+      <AdminSidebar
+        activeTab={activeTab}
+        onSelectTab={(tab) => { setActiveTab(tab); setEditingApt(null); if (tab !== 'users') setSelectedUserHistory(null); }}
+        counts={{ appointments: appointments.length, orders: orders.length, users: users.length }}
+        onLogout={handleLogout}
+        isOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
+
+      <main className="admin-main">
+        <div className="admin-mobile-bar">
+          <button onClick={() => setMobileNavOpen(true)}><IconMenu size={22} /></button>
+          <h1>{meta.title}</h1>
         </div>
-        <button onClick={handleLogout} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>
-          🔒 Ασφαλής Αποσύνδεση
-        </button>
-      </div>
-      
-      {/* TABS MENU */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap', background: '#fff', padding: '8px', borderRadius: '10px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-        <button onClick={() => { setActiveTab('appointments'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'appointments' ? '#3b2b1f' : 'transparent', color: activeTab === 'appointments' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📅 Ραντεβού ({appointments.length})</button>
-        <button onClick={() => { setActiveTab('calendar'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'calendar' ? '#3b2b1f' : 'transparent', color: activeTab === 'calendar' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🗓️ Ημερολόγιο</button>
-        <button onClick={() => { setActiveTab('availability'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'availability' ? '#bc9c82' : 'transparent', color: activeTab === 'availability' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🔒 Κλείδωμα Ωρών / Ρεπό</button>
-        <button onClick={() => { setActiveTab('orders'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'orders' ? '#3b2b1f' : 'transparent', color: activeTab === 'orders' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📦 Παραγγελίες ({orders.length})</button>
-        <button onClick={() => { setActiveTab('products'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'products' ? '#3b2b1f' : 'transparent', color: activeTab === 'products' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>🛒 Προϊόντα E-shop</button>
-        <button onClick={() => { setActiveTab('services'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'services' ? '#3b2b1f' : 'transparent', color: activeTab === 'services' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>💅 Υπηρεσίες & Χρόνοι</button>
-        <button onClick={() => { setActiveTab('stats'); setEditingApt(null); }} style={{ padding: '12px 24px', background: activeTab === 'stats' ? '#10b981' : 'transparent', color: activeTab === 'stats' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>📊 Στατιστικά (BI)</button>
-        <button onClick={() => { setActiveTab('users'); setEditingApt(null); setSelectedUserHistory(null); }} style={{ padding: '12px 24px', background: activeTab === 'users' ? '#0d6efd' : 'transparent', color: activeTab === 'users' ? '#fff' : '#495057', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>👤 Χρήστες ({users.length})</button>
-      </div>
 
-      {/* TAB 1: ΡΑΝΤΕΒΟΥ */}
-      {activeTab === 'appointments' && (
-        <div style={{ display: 'grid', gridTemplateColumns: editingApt ? '2fr 1fr' : '1fr', gap: '25px' }}>
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-              <h3 style={{ margin: 0, color: '#3b2b1f' }}>Πρόγραμμα & Κρατήσεις</h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input type="text" placeholder="🔍 Αναζήτηση πελάτη/υπηρεσίας..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                {dateFilter && <button onClick={() => setDateFilter('')} style={{ background: '#e9ecef', border: 'none', padding: '8px', borderRadius: '6px', cursor: 'pointer' }}>✖</button>}
-              </div>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f8f9fa', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  <th style={{ padding: '15px' }}>Πελάτης / Στοιχεία</th>
-                  <th style={{ padding: '15px' }}>Υπηρεσία / Λόγος</th>
-                  <th style={{ padding: '15px' }}>Ημερομηνία & Ώρα</th>
-                  <th style={{ padding: '15px' }}>Τύπος</th>
-                  <th style={{ padding: '15px', textAlign: 'right' }}>Ενέργειες</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAppointments.map(apt => {
-                  const isBlocked = apt.client_name === "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
-                  return (
-                    <tr key={apt.id} style={{ borderBottom: '1px solid #dee2e6', background: isBlocked ? '#fff3cd' : 'transparent' }}>
-                      <td style={{ padding: '15px' }}>
-                        <strong style={{ color: isBlocked ? '#856404' : '#212529' }}>{apt.client_name}</strong><br/>
-                        {!isBlocked && <small style={{ color: '#6c757d' }}>📱 {apt.client_phone}</small>}
-                      </td>
-                      <td style={{ padding: '15px' }}>
-                        <span style={{ background: isBlocked ? 'transparent' : '#f1ece8', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: '500' }}>
-                          {apt.service_name}
-                        </span>
-                      </td>
-                      <td style={{ padding: '15px', fontWeight: '500' }}>
-                        📅 {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')} <span style={{ color: '#dc3545', marginLeft: '5px' }}>⏰ {apt.appointment_time.slice(0,5)}</span>
-                      </td>
-                      <td style={{ padding: '15px' }}>
-                        <small style={{ 
-                          padding: '3px 8px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold',
-                          background: apt.payment_type?.includes('Stripe') ? '#d1e7dd' : '#e2e3e5',
-                          color: apt.payment_type?.includes('Stripe') ? '#0f5132' : '#41464b'
-                        }}>
-                          {apt.payment_type || 'Κατάστημα'}
-                        </small>
-                      </td>
-                      <td style={{ padding: '15px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
-                          {apt.status !== 'completed' && apt.status !== 'cancelled' && (
-                            <button onClick={() => updateAppointmentStatus(apt.id, 'completed')} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }} title="Σήμανση ως Ολοκληρωμένο">✅</button>
-                          )}
-                          <button onClick={() => setEditingApt(apt)} style={{ background: '#ffc107', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}>✏️</button>
-                          <button onClick={() => handleDeleteAppointment(apt.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="admin-page-header">
+          <div>
+            <h2>{meta.title}</h2>
+            <p>{meta.subtitle}</p>
           </div>
-
-          {editingApt && (
-             <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', borderTop: '4px solid #ffc107' }}>
-             <h4 style={{ margin: '0 0 20px 0', color: '#3b2b1f' }}>✏️ Επεξεργασία Κράτησης</h4>
-             <form onSubmit={handleUpdateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-               <div>
-                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Όνομα Πελάτη</label>
-                 <input type="text" value={editingApt.client_name} onChange={e => setEditingApt({...editingApt, client_name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-               </div>
-               <div>
-                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Τηλέφωνο</label>
-                 <input type="tel" value={editingApt.client_phone} onChange={e => setEditingApt({...editingApt, client_phone: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-               </div>
-               <div style={{ display: 'flex', gap: '10px' }}>
-                 <div style={{ width: '100%' }}>
-                   <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ημερομηνία</label>
-                   <input type="date" value={formatLocalDate(editingApt.appointment_date)} onChange={e => setEditingApt({...editingApt, appointment_date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-                 </div>
-                 <div style={{ width: '100%' }}>
-                   <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ώρα</label>
-                   <input type="time" value={editingApt.appointment_time.slice(0,5)} onChange={e => setEditingApt({...editingApt, appointment_time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} required />
-                 </div>
-               </div>
-               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                 <button type="submit" style={{ width: '100%', background: '#10b981', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Αποθήκευση</button>
-                 <button type="button" onClick={() => setEditingApt(null)} style={{ width: '100%', background: '#e5e7eb', color: '#495057', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Ακύρωση</button>
-               </div>
-             </form>
-           </div>
-          )}
         </div>
-      )}
 
-      {/* TAB: ΗΜΕΡΟΛΟΓΙΟ ΡΑΝΤΕΒΟΥ */}
-      {activeTab === 'calendar' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(380px, 450px) 1fr', gap: '25px', alignItems: 'start' }}>
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#3b2b1f' }}>🗓️ Ημερολόγιο Ραντεβού</h3>
-            <DatePicker
-              inline
-              locale="el"
-              calendarClassName="vd-admin-calendar"
-              selected={selectedCalendarDay}
-              onChange={(date) => { setSelectedCalendarDay(date); setShowBookingForm(false); }}
-              renderDayContents={(day, date) => {
-                const dateStr = formatLocalDate(date);
-                const count = appointments.filter(a => formatLocalDate(a.appointment_date) === dateStr && a.client_name !== "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ").length;
-                return (
-                  <div style={{ position: 'relative' }}>
-                    {day}
-                    {count > 0 && (
-                      <span style={{ position: 'absolute', top: '-4px', right: '-8px', background: '#10b981', color: '#fff', borderRadius: '50%', fontSize: '0.6rem', width: '15px', height: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                        {count}
-                      </span>
-                    )}
+        {/* ================= ΡΑΝΤΕΒΟΥ ================= */}
+        {activeTab === 'appointments' && (
+          <div className={`admin-grid admin-grid-2fr1fr${editingApt ? ' split' : ''}`}>
+            <div className="admin-card">
+              <div className="admin-card-header">
+                <div>
+                  <h3 className="admin-h">Πρόγραμμα &amp; κρατήσεις</h3>
+                  <p className="admin-subtle">{filteredAppointments.length} εγγραφές</p>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div className="admin-search">
+                    <IconSearch size={15} />
+                    <input type="text" className="admin-input" placeholder="Αναζήτηση πελάτη ή υπηρεσίας…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                   </div>
-                );
-              }}
-            />
-          </div>
-
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-              <h3 style={{ margin: 0, color: '#3b2b1f' }}>📋 Ραντεβού: {formatLocalDate(selectedCalendarDay).split('-').reverse().join('/')}</h3>
-              <button onClick={() => setShowBookingForm(!showBookingForm)} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-                {showBookingForm ? '✖ Ακύρωση' : '+ Νέο Ραντεβού'}
-              </button>
-            </div>
-
-            {showBookingForm && (
-              <form onSubmit={handleBookForClient} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6' }}>
-                <div style={{ position: 'relative' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Πελάτισσα *</label>
-                  <input
-                    type="text"
-                    placeholder="🔍 Αναζήτηση με όνομα, email ή τηλέφωνο..."
-                    value={clientSearchTerm}
-                    onChange={e => { setClientSearchTerm(e.target.value); setBookingForm({ ...bookingForm, userId: '' }); }}
-                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}
-                  />
-                  {clientSearchTerm && !bookingForm.userId && (
-                    <div style={{ position: 'absolute', zIndex: 10, background: '#fff', border: '1px solid #dee2e6', borderRadius: '6px', maxHeight: '180px', overflowY: 'auto', width: '100%', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                      {users.filter(u =>
-                        u.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
-                        u.email.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
-                        u.phone.includes(clientSearchTerm)
-                      ).slice(0, 8).map(u => (
-                        <div key={u.id} onClick={() => { setBookingForm({ ...bookingForm, userId: u.id }); setClientSearchTerm(`${u.name} (${u.phone})`); }}
-                          style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #f1ece8' }}>
-                          <strong>{u.name}</strong><br /><small style={{ color: '#6c757d' }}>{u.email} · {u.phone}</small>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <input type="date" className="admin-input" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+                  {dateFilter && <button className="admin-icon-btn" onClick={() => setDateFilter('')} title="Καθαρισμός φίλτρου"><IconX size={14} /></button>}
                 </div>
+              </div>
 
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Υπηρεσία *</label>
-                  <select required value={bookingForm.serviceId} onChange={e => setBookingForm({ ...bookingForm, serviceId: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}>
-                    <option value="">-- Επιλέξτε υπηρεσία --</option>
-                    {services.map(s => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.duration_minutes}λ - {Number(s.price).toFixed(2)}€)</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Ώρα *</label>
-                  <input type="time" required value={bookingForm.time} onChange={e => setBookingForm({ ...bookingForm, time: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                </div>
-
-                <button type="submit" disabled={!bookingForm.userId} style={{ background: bookingForm.userId ? '#3b2b1f' : '#ced4da', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: bookingForm.userId ? 'pointer' : 'not-allowed' }}>
-                  ✅ Καταχώρηση Ραντεβού
-                </button>
-              </form>
-            )}
-
-            {(() => {
-              const dayAppointments = appointments.filter(a => formatLocalDate(a.appointment_date) === formatLocalDate(selectedCalendarDay));
-              const dayLayout = layoutDayAppointments(dayAppointments);
-              const hours = [];
-              for (let h = TIMELINE_START_HOUR; h < TIMELINE_END_HOUR; h++) hours.push(h);
-              const timelineHeight = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60 * PX_PER_MIN;
-              const LABEL_COL_WIDTH = 60;
-
-              return (
-                <div style={{ position: 'relative', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
-                  {hours.map(hour => (
-                    <div key={hour} style={{ height: `${60 * PX_PER_MIN}px`, display: 'flex', borderTop: hour !== TIMELINE_START_HOUR ? '1px solid #f1ece8' : 'none' }}>
-                      <div style={{ width: `${LABEL_COL_WIDTH}px`, flexShrink: 0, textAlign: 'right', paddingRight: '10px', fontSize: '0.8rem', fontWeight: '600', color: '#6c757d', transform: 'translateY(-8px)' }}>
-                        {String(hour).padStart(2, '0')}:00
-                      </div>
-                      <div style={{ flex: 1, borderLeft: '1px solid #f1ece8' }}>
-                        <div
-                          onClick={() => { setBookingForm({ ...bookingForm, time: `${String(hour).padStart(2, '0')}:00` }); setShowBookingForm(true); }}
-                          style={{ height: '50%', cursor: 'pointer' }}
-                        />
-                        <div
-                          onClick={() => { setBookingForm({ ...bookingForm, time: `${String(hour).padStart(2, '0')}:30` }); setShowBookingForm(true); }}
-                          style={{ height: '50%', cursor: 'pointer', borderTop: '1px dashed #f6f2ef' }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-
-                  <div style={{ position: 'absolute', top: 0, left: `${LABEL_COL_WIDTH}px`, right: 0, height: `${timelineHeight}px`, pointerEvents: 'none' }}>
-                    {dayLayout.map(({ apt, start, end, col, totalCols }) => {
-                      const isBlocked = apt.client_name === "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
-                      const top = Math.max(0, (start - TIMELINE_START_HOUR * 60) * PX_PER_MIN);
-                      const height = Math.max(40, (end - start) * PX_PER_MIN);
-                      const widthPct = 100 / totalCols;
-                      const leftPct = col * widthPct;
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Πελάτης</th>
+                      <th>Υπηρεσία</th>
+                      <th>Ημερομηνία &amp; ώρα</th>
+                      <th>Πληρωμή</th>
+                      <th style={{ textAlign: 'right' }}>Ενέργειες</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAppointments.length === 0 ? (
+                      <tr><td colSpan={5} className="admin-empty">Δεν βρέθηκαν ραντεβού.</td></tr>
+                    ) : filteredAppointments.map(apt => {
+                      const isBlocked = apt.client_name === BLOCKED_CLIENT_NAME;
                       return (
-                        <div
-                          key={apt.id}
-                          title={`${minutesToTimeLabel(start)}–${minutesToTimeLabel(end)} · ${apt.client_name} · ${apt.service_name} (${end - start}λ)`}
-                          style={{
-                            position: 'absolute',
-                            top: `${top}px`,
-                            height: `${height}px`,
-                            left: `calc(${leftPct}% + 4px)`,
-                            width: `calc(${widthPct}% - 8px)`,
-                            background: isBlocked ? 'repeating-linear-gradient(45deg, #fff3cd, #fff3cd 6px, #ffe69c 6px, #ffe69c 12px)' : '#f1e4d8',
-                            borderLeft: `4px solid ${isBlocked ? '#e0a800' : '#bc9c82'}`,
-                            borderRadius: '6px',
-                            padding: '5px 9px',
-                            fontSize: '0.78rem',
-                            lineHeight: 1.35,
-                            color: '#3b2b1f',
-                            overflow: 'hidden',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                            pointerEvents: 'auto',
-                            cursor: 'default'
-                          }}
-                        >
-                          <strong style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{apt.client_name}</strong>
-                          <span style={{ display: 'block', color: '#6c757d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {minutesToTimeLabel(start)}–{minutesToTimeLabel(end)} · {end - start}λ
-                          </span>
-                          {height > 46 && (
-                            <span style={{ display: 'block', color: '#8c7a6b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {apt.service_name}
-                            </span>
-                          )}
-                        </div>
+                        <tr key={apt.id} className={isBlocked ? 'is-flagged' : ''}>
+                          <td data-label="Πελάτης">
+                            {isBlocked ? (
+                              <strong>{BLOCKED_LABEL}</strong>
+                            ) : (
+                              <>
+                                <button className="admin-name-link" onClick={() => fetchHistoryByPhone(apt.client_name, apt.client_phone)}>{apt.client_name}</button>
+                                <span className="admin-cell-sub">{apt.client_phone}</span>
+                              </>
+                            )}
+                          </td>
+                          <td data-label="Υπηρεσία"><span className="admin-badge admin-badge-brand">{apt.service_name}</span></td>
+                          <td data-label="Ημερομηνία & ώρα">
+                            {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')}
+                            <span className="admin-cell-sub">{apt.appointment_time.slice(0, 5)}</span>
+                          </td>
+                          <td data-label="Πληρωμή"><span className={`admin-badge ${apt.payment_type?.includes('Stripe') ? 'admin-badge-success' : 'admin-badge-neutral'}`}>{apt.payment_type || 'Κατάστημα'}</span></td>
+                          <td data-label="Ενέργειες">
+                            <div className="admin-row-actions">
+                              {apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                                <button className="admin-icon-btn admin-icon-btn--success" onClick={() => updateAppointmentStatus(apt.id, 'completed')} title="Ολοκλήρωση"><IconCheck size={15} /></button>
+                              )}
+                              <button className="admin-icon-btn" onClick={() => openEditAppointment(apt)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                              <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteAppointment(apt.id)} title="Διαγραφή"><IconTrash size={15} /></button>
+                            </div>
+                          </td>
+                        </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {editingApt && (
+              <div className="admin-card" style={{ height: 'fit-content' }}>
+                <h4 className="admin-h" style={{ marginBottom: 18 }}>Επεξεργασία κράτησης</h4>
+                <form onSubmit={handleUpdateAppointment} className="admin-form">
+                  <div className="admin-field">
+                    <label className="admin-label">Όνομα πελάτη</label>
+                    <input type="text" className="admin-input" value={editingApt.client_name} onChange={e => setEditingApt({ ...editingApt, client_name: e.target.value })} required />
                   </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: ΚΛΕΙΔΩΜΑ ΩΡΩΝ */}
-      {activeTab === 'availability' && (
-        <div style={{ maxWidth: '600px', margin: '0 auto', background: '#fff', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderTop: '4px solid #bc9c82' }}>
-        <h3 style={{ margin: '0 0 10px 0', color: '#3b2b1f' }}>🔒 Κλείδωμα Ημερολογίου</h3>
-        <form onSubmit={handleBlockTime} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ημερομηνία *</label>
-            <input type="date" required value={blockForm.date} onChange={e => setBlockForm({...blockForm, date: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-          </div>
-          <div style={{ display: 'flex', gap: '15px' }}>
-            <div style={{ width: '100%' }}>
-              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Ώρα Έναρξης</label>
-              <input type="time" value={blockForm.time} onChange={e => setBlockForm({...blockForm, time: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-            </div>
-            <div style={{ width: '100%' }}>
-              <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Διάρκεια (Λεπτά)</label>
-              <input 
-                type="number" 
-                min="15" 
-                required 
-                placeholder="π.χ. 120"
-                value={blockForm.duration} 
-                onChange={e => setBlockForm({...blockForm, duration: e.target.value})} 
-                style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} 
-              />
-            </div>
-          </div>
-          <div>
-            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '6px', fontSize: '0.9rem' }}>Αιτιολογία</label>
-            <input type="text" value={blockForm.reason} onChange={e => setBlockForm({...blockForm, reason: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-          </div>
-          <button type="submit" style={{ background: '#bc9c82', color: '#fff', border: 'none', padding: '14px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>🔒 Κλείδωμα Ώρας</button>
-        </form>
-      </div>
-      )}
-
-      {/* TAB 3: ΠΑΡΑΓΓΕΛΙΕΣ (ΜΕ ΕΛΕΓΧΟ STATUS & ΑΝΑΖΗΤΗΣΗ) */}
-      {activeTab === 'orders' && (
-        <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-            <h3 style={{ margin: 0, color: '#3b2b1f' }}>Διαχείριση Παραγγελιών (E-shop)</h3>
-            <input 
-              type="text" 
-              placeholder="🔍 Αναζήτηση με κωδικό ή όνομα..." 
-              value={orderSearchTerm} 
-              onChange={e => setOrderSearchTerm(e.target.value)} 
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', width: '300px' }} 
-            />
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#f8f9fa', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                <th style={{ padding: '15px' }}>Κωδικός / Πελάτης</th>
-                <th style={{ padding: '15px' }}>Προϊόντα</th>
-                <th style={{ padding: '15px' }}>Locker BoxNow</th>
-                <th style={{ padding: '15px', textAlign: 'right' }}>Σύνολο</th>
-                <th style={{ padding: '15px', textAlign: 'center' }}>Κατάσταση</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map(order => {
-                const isCancelled = order.status === 'cancelled';
-                return (
-                  <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6', background: isCancelled ? '#f8d7da' : 'transparent' }}>
-                    <td style={{ padding: '15px' }}>
-                      <span style={{ background: '#e9ecef', padding: '3px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>#{order.id}</span><br />
-                      <strong>{order.client_name}</strong><br/>
-                      <small style={{ color: '#6c757d' }}>📱 {order.client_phone}</small>
-                    </td>
-                    <td style={{ padding: '15px' }}>
-                      {order.products?.map((p, idx) => (
-                        <div key={idx} style={{ fontSize: '0.9rem', marginBottom: '3px' }}>
-                          📦 <strong>{p.qty}x</strong> - {p.name}
-                        </div>
-                      ))}
-                    </td>
-                    <td style={{ padding: '15px', fontSize: '0.85rem', color: '#0056b3' }}>{order.boxnow_locker}</td>
-                    <td style={{ padding: '15px', textAlign: 'right' }}><strong style={{ color: '#10b981' }}>{Number(order.total_amount).toFixed(2)}€</strong></td>
-                    <td style={{ padding: '15px', textAlign: 'center' }}>
-                      {isCancelled ? (
-                        <span style={{ color: '#721c24', fontWeight: 'bold', background: '#f5c6cb', padding: '6px 12px', borderRadius: '20px', fontSize: '0.85rem' }}>🚫 Ακυρώθηκε</span>
-                      ) : (
-                        <select 
-                          value={order.status} 
-                          onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
-                          style={{ 
-                            padding: '6px 10px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', border: 'none', cursor: 'pointer',
-                            backgroundColor: order.status === 'completed' ? '#d1e7dd' : order.status === 'shipped' ? '#cff4fc' : order.status === 'cancelled' ? '#f8d7da' : '#fff3cd',
-                            color: order.status === 'completed' ? '#0f5132' : order.status === 'shipped' ? '#055160' : order.status === 'cancelled' ? '#842029' : '#856404'
-                          }}
-                        >
-                          <option value="pending">📦 Εκκρεμεί</option>
-                          <option value="shipped">🚚 Στάλθηκε</option>
-                          <option value="completed">✅ Παραλήφθηκε</option>
-                          <option value="cancelled">🚫 Ακυρώθηκε</option>
-                        </select>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* TAB 4: ΠΡΟΪΟΝΤΑ (FILE UPLOAD) */}
-      {activeTab === 'products' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: 'fit-content' }}>
-            <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>{productForm.id ? '✏️ Επεξεργασία' : '🛍️ Νέο Προϊόν'}</h3>
-            <form onSubmit={handleSaveProduct} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <input type="text" placeholder="Όνομα Προϊόντος" required value={productForm.name} onChange={e => setProductForm({...productForm, name: e.target.value})} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/>
-              <textarea placeholder="Περιγραφή προϊόντος..." value={productForm.description} onChange={e => setProductForm({...productForm, description: e.target.value})} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ced4da', minHeight: '80px' }}/>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Τιμή (€)</label><input type="number" step="0.01" required value={productForm.price} onChange={e => setProductForm({...productForm, price: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
-                <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Απόθεμα</label><input type="number" required value={productForm.stock} onChange={e => setProductForm({...productForm, stock: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Κατηγορία</label>
-                <input
-                  type="text"
-                  list="product-categories-list"
-                  placeholder="π.χ. Βερνίκια, Εργαλεία..."
-                  value={productForm.category}
-                  onChange={e => setProductForm({ ...productForm, category: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}
-                />
-                <datalist id="product-categories-list">
-                  {[...new Set(products.map(p => p.category).filter(Boolean))].map(cat => (
-                    <option key={cat} value={cat} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Φωτογραφία Προϊόντος</label>
-                <input 
-                  type="file" 
-                  accept="image/*"
-                  onChange={e => setProductForm({...productForm, imageFile: e.target.files[0]})} 
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '6px' }}
-                />
-                {!productForm.imageFile && !productForm.id && <small style={{ color: '#dc3545' }}>*Απαιτείται επιλογή αρχείου.</small>}
-              </div>
-
-              <button type="submit" style={{ background: '#3b2b1f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>{productForm.id ? 'Αποθήκευση' : 'Προσθήκη'}</button>
-              {productForm.id && <button type="button" onClick={() => setProductForm({ id: null, name: '', description: '', price: '', imageFile: null, stock: 10, category: 'Γενικά' })} style={{ padding: '10px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Ακύρωση</button>}
-            </form>
-          </div>
-
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Αποθήκη Προϊόντων</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {products.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
-                  <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <img src={p.image_url} alt="img" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} />
-                   <div>
-                      <strong style={{ fontSize: '1.05rem' }}>{p.name}</strong>
-                      <span style={{ marginLeft: '10px', background: '#f1ece8', color: '#3b2b1f', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>{p.category || 'Γενικά'}</span><br/>
-                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(p.price).toFixed(2)}€</span>
-                      <small style={{
-                        marginLeft: '15px', 
-                        color: p.stock <= 2 ? '#721c24' : '#6c757d', 
-                        fontWeight: 'bold',
-                        background: p.stock <= 2 ? '#f8d7da' : '#e9ecef',
-                        padding: '3px 8px',
-                        borderRadius: '12px'
-                      }}>
-                        📦 Απόθεμα: {p.stock}
-                      </small>
+                  <div className="admin-field">
+                    <label className="admin-label">Τηλέφωνο</label>
+                    <input type="tel" className="admin-input" value={editingApt.client_phone} onChange={e => setEditingApt({ ...editingApt, client_phone: e.target.value })} />
+                  </div>
+                  <div className="admin-form-row">
+                    <div className="admin-field">
+                      <label className="admin-label">Ημερομηνία</label>
+                      <input type="date" className="admin-input" value={formatLocalDate(editingApt.appointment_date)} onChange={e => setEditingApt({ ...editingApt, appointment_date: e.target.value })} required />
+                    </div>
+                    <div className="admin-field">
+                      <label className="admin-label">Ώρα</label>
+                      <input type="time" className="admin-input" value={editingApt.appointment_time.slice(0, 5)} onChange={e => setEditingApt({ ...editingApt, appointment_time: e.target.value })} required />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setProductForm(p)} style={{ background: '#ffc107', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>✏️</button>
-                    <button onClick={() => handleDeleteProduct(p.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
+                  <div className="admin-field">
+                    <label className="admin-label">Υπηρεσίες</label>
+                    <ServicePicker services={services} selected={editServices} onChange={setEditServices} />
                   </div>
-                </div>
-              ))}
+                  <div className="admin-form-actions">
+                    <button type="submit" className="admin-btn admin-btn-primary admin-btn-block">Αποθήκευση</button>
+                    <button type="button" className="admin-btn admin-btn-secondary admin-btn-block" onClick={() => { setEditingApt(null); setEditServices([]); }}>Ακύρωση</button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= ΗΜΕΡΟΛΟΓΙΟ (+ ΩΡΑΡΙΟ & ΔΙΑΘΕΣΙΜΟΤΗΤΑ, ενσωματωμένα) ================= */}
+        {activeTab === 'calendar' && (
+          <WeekCalendar
+            apiUrl={API_URL}
+            getJsonHeaders={getJsonHeaders}
+            getAuthHeaders={getAuthHeaders}
+            appointments={appointments}
+            services={services}
+            users={users}
+            formatLocalDate={formatLocalDate}
+            onAppointmentsChanged={fetchAppointments}
+            onViewProfile={fetchHistoryByPhone}
+          />
+        )}
+
+        {/* ================= ΠΑΡΑΓΓΕΛΙΕΣ ================= */}
+        {activeTab === 'orders' && (
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h3 className="admin-h">Διαχείριση παραγγελιών</h3>
+              <div className="admin-search">
+                <IconSearch size={15} />
+                <input type="text" className="admin-input" placeholder="Αναζήτηση με κωδικό ή όνομα…" value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} style={{ width: 280 }} />
+              </div>
+            </div>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Κωδικός / Πελάτης</th>
+                    <th>Προϊόντα</th>
+                    <th>Locker BoxNow</th>
+                    <th style={{ textAlign: 'right' }}>Σύνολο</th>
+                    <th style={{ textAlign: 'center' }}>Κατάσταση</th>
+                    <th>Tracking BoxNow</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.length === 0 ? (
+                    <tr><td colSpan={6} className="admin-empty">Δεν βρέθηκαν παραγγελίες.</td></tr>
+                  ) : filteredOrders.map(order => {
+                    const isCancelled = order.status === 'cancelled';
+                    const isShipped = order.status === 'shipped';
+                    return (
+                      <tr key={order.id} className={isCancelled ? 'is-flagged' : ''}>
+                        <td data-label="Κωδικός / Πελάτης">
+                          <span className="admin-badge admin-badge-neutral">#{order.id}</span>
+                          <strong style={{ display: 'block', marginTop: 4 }}>{order.client_name}</strong>
+                          <span className="admin-cell-sub">{order.client_phone}</span>
+                        </td>
+                        <td data-label="Προϊόντα">
+                          {order.products?.map((p, idx) => (
+                            <div key={idx} style={{ fontSize: '0.85rem', marginBottom: 2 }}>
+                              <strong>{p.qty}×</strong> {p.name}
+                            </div>
+                          ))}
+                        </td>
+                        <td data-label="Locker BoxNow" style={{ fontSize: '0.85rem', color: 'var(--info)' }}>{order.boxnow_locker}</td>
+                        <td data-label="Σύνολο" style={{ textAlign: 'right' }}><strong style={{ color: 'var(--success)' }}>{Number(order.total_amount).toFixed(2)}€</strong></td>
+                        <td data-label="Κατάσταση" style={{ textAlign: 'center' }}>
+                          {isCancelled ? (
+                            <span className="admin-badge admin-badge-danger">Ακυρώθηκε</span>
+                          ) : (
+                            <select
+                              className="admin-select-status"
+                              value={order.status}
+                              onChange={(e) => handleOrderStatusChange(order.id, e.target.value)}
+                              style={{
+                                background: order.status === 'completed' ? 'var(--success-bg)' : order.status === 'shipped' ? 'var(--info-bg)' : 'var(--warning-bg)',
+                                color: order.status === 'completed' ? 'var(--success)' : order.status === 'shipped' ? 'var(--info)' : 'var(--warning)'
+                              }}
+                            >
+                              <option value="pending">Εκκρεμεί</option>
+                              <option value="shipped">Στάλθηκε</option>
+                              <option value="completed">Παραλήφθηκε</option>
+                              <option value="cancelled">Ακυρώθηκε</option>
+                            </select>
+                          )}
+                        </td>
+                        <td data-label="Tracking BoxNow">
+                          {isShipped ? (
+                            <div style={{ display: 'flex', gap: 6, minWidth: 200 }}>
+                              <input
+                                type="text"
+                                className="admin-input"
+                                placeholder="Link παρακολούθησης…"
+                                value={trackingDrafts[order.id] ?? order.tracking_link ?? ''}
+                                onChange={e => setTrackingDrafts({ ...trackingDrafts, [order.id]: e.target.value })}
+                              />
+                              <button className="admin-icon-btn admin-icon-btn--success" title="Αποθήκευση" onClick={() => handleSaveTrackingLink(order.id)}>
+                                <IconCheck size={14} />
+                              </button>
+                            </div>
+                          ) : order.tracking_link ? (
+                            <a href={order.tracking_link} target="_blank" rel="noopener noreferrer" className="admin-cell-sub" style={{ color: 'var(--info)' }}>{order.tracking_link}</a>
+                          ) : (
+                            <span className="admin-cell-sub">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB 5: ΔΙΑΧΕΙΡΙΣΗ ΥΠΗΡΕΣΙΩΝ */}
-      {activeTab === 'services' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
-          
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', height: 'fit-content' }}>
-            <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>{serviceForm.id ? '✏️ Επεξεργασία Χρόνου' : '💅 Νέα Υπηρεσία'}</h3>
-            <form onSubmit={handleSaveService} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Κατηγορία Μενού</label>
-                <select value={serviceForm.category} onChange={e => setServiceForm({...serviceForm, category: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}>
-                  <option value="Χέρια">Χέρια</option>
-                  <option value="Πόδια">Πόδια</option>
-                  <option value="Πρόσωπο">Πρόσωπο</option>
-                </select>
+        {/* ================= ΠΡΟΪΟΝΤΑ ================= */}
+        {activeTab === 'products' && (
+          <div className="admin-grid admin-grid-form-list split">
+            <div className="admin-card" style={{ height: 'fit-content' }}>
+              <h3 className="admin-h" style={{ marginBottom: 18 }}>{productForm.id ? 'Επεξεργασία προϊόντος' : 'Νέο προϊόν'}</h3>
+              <form onSubmit={handleSaveProduct} className="admin-form">
+                <input type="text" className="admin-input" placeholder="Όνομα προϊόντος" required value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} />
+                <textarea className="admin-textarea" placeholder="Περιγραφή προϊόντος…" value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} />
+                <div className="admin-form-row">
+                  <div className="admin-field">
+                    <label className="admin-label">Τιμή (€)</label>
+                    <input type="number" step="0.01" required className="admin-input" value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} />
+                  </div>
+                  <div className="admin-field">
+                    <label className="admin-label">Απόθεμα</label>
+                    <input type="number" required className="admin-input" value={productForm.stock} onChange={e => setProductForm({ ...productForm, stock: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="admin-field">
+                  <label className="admin-label">Κατηγορία</label>
+                  <input
+                    type="text"
+                    list="product-categories-list"
+                    className="admin-input"
+                    placeholder="π.χ. Βερνίκια, Εργαλεία…"
+                    value={productForm.category}
+                    onChange={e => setProductForm({ ...productForm, category: e.target.value })}
+                  />
+                  <datalist id="product-categories-list">
+                    {[...new Set(products.map(p => p.category).filter(Boolean))].map(cat => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div className="admin-field">
+                  <label className="admin-label">Φωτογραφία προϊόντος</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="admin-input"
+                    onChange={e => setProductForm({ ...productForm, imageFile: e.target.files[0] })}
+                  />
+                  {!productForm.imageFile && !productForm.id && <span className="admin-cell-sub" style={{ color: 'var(--danger)' }}>Απαιτείται επιλογή αρχείου.</span>}
+                </div>
+
+                <div className="admin-form-actions">
+                  <button type="submit" className="admin-btn admin-btn-primary admin-btn-block">{productForm.id ? 'Αποθήκευση' : 'Προσθήκη'}</button>
+                  {productForm.id && <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setProductForm({ id: null, name: '', description: '', price: '', imageFile: null, stock: 10, category: 'Γενικά' })}>Ακύρωση</button>}
+                </div>
+              </form>
+            </div>
+
+            <div className="admin-card">
+              <h3 className="admin-h" style={{ marginBottom: 18 }}>Αποθήκη προϊόντων</h3>
+              <div className="admin-stack" style={{ gap: 12 }}>
+                {products.map(p => (
+                  <div key={p.id} className="admin-list-item-row">
+                    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                      <img src={p.image_url} alt={p.name} className="admin-thumb" />
+                      <div>
+                        <strong style={{ fontSize: '0.95rem', display: 'block' }}>{p.name}</strong>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                          <span className="admin-badge admin-badge-brand">{p.category || 'Γενικά'}</span>
+                          <strong style={{ color: 'var(--success)' }}>{Number(p.price).toFixed(2)}€</strong>
+                          <span className={`admin-badge ${p.stock <= 2 ? 'admin-badge-danger' : 'admin-badge-neutral'}`}>
+                            {p.stock <= 2 && <IconAlert size={11} />} Απόθεμα: {p.stock}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="admin-row-actions">
+                      <button className="admin-icon-btn" onClick={() => setProductForm(p)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                      <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteProduct(p.id)} title="Διαγραφή"><IconTrash size={15} /></button>
+                    </div>
+                  </div>
+                ))}
+                {products.length === 0 && <p className="admin-empty">Δεν υπάρχουν προϊόντα.</p>}
               </div>
-              
-              <input type="text" required placeholder="Όνομα Υπηρεσίας (π.χ. Ημιμόνιμο με Spa)" value={serviceForm.name} onChange={e => setServiceForm({...serviceForm, name: e.target.value})} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/>
-              <textarea placeholder="Περιγραφή υπηρεσίας..." value={serviceForm.description || ''} onChange={e => setServiceForm({...serviceForm, description: e.target.value})} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ced4da', minHeight: '80px' }}/>
+            </div>
+          </div>
+        )}
 
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Τιμή (€)</label><input type="number" step="0.01" required value={serviceForm.price} onChange={e => setServiceForm({...serviceForm, price: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}/></div>
-                <div style={{ width: '100%' }}><label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Διάρκεια (Λεπτά) *</label>
-                  <select value={serviceForm.duration_minutes} onChange={e => setServiceForm({...serviceForm, duration_minutes: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ced4da' }}>
-                    <option value="30">30 λεπτά</option>
-                    <option value="45">45 λεπτά</option>
-                    <option value="60">1 ώρα (60λ)</option>
-                    <option value="90">1.5 ώρα (90λ)</option>
-                    <option value="120">2 ώρες (120λ)</option>
-                    <option value="150">2.5 ώρες (150λ)</option>
+        {/* ================= ΥΠΗΡΕΣΙΕΣ ================= */}
+        {activeTab === 'services' && (
+          <div className="admin-grid admin-grid-form-list split">
+            <div className="admin-card" style={{ height: 'fit-content' }}>
+              <h3 className="admin-h" style={{ marginBottom: 18 }}>{serviceForm.id ? 'Επεξεργασία υπηρεσίας' : 'Νέα υπηρεσία'}</h3>
+              <form onSubmit={handleSaveService} className="admin-form">
+                <div className="admin-field">
+                  <label className="admin-label">Κατηγορία μενού</label>
+                  <select className="admin-select" value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}>
+                    <option value="Χέρια">Χέρια</option>
+                    <option value="Πόδια">Πόδια</option>
+                    <option value="Πρόσωπο">Πρόσωπο</option>
                   </select>
                 </div>
-              </div>
-              
-              <button type="submit" style={{ background: '#3b2b1f', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>{serviceForm.id ? 'Αποθήκευση Χρόνων' : 'Δημιουργία Υπηρεσίας'}</button>
-              {serviceForm.id && <button type="button" onClick={() => setServiceForm({ id: null, category: 'Χέρια', name: '', description: '', price: '', duration_minutes: 60 })} style={{ padding: '10px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Ακύρωση</button>}
-            </form>
-          </div>
 
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <h3 style={{ marginBottom: '20px', color: '#3b2b1f' }}>Κατάλογος Υπηρεσιών</h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-              {['Χέρια', 'Πόδια', 'Πρόσωπο'].map(category => {
-                const categoryServices = services.filter(s => s.category === category);
-                
-                if (categoryServices.length === 0) return null; 
+                <input type="text" className="admin-input" required placeholder="Όνομα υπηρεσίας (π.χ. Ημιμόνιμο με Spa)" value={serviceForm.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} />
+                <textarea className="admin-textarea" placeholder="Περιγραφή υπηρεσίας…" value={serviceForm.description || ''} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} />
 
-                return (
-                  <div key={category}>
-                    <h4 style={{ color: '#bc9c82', borderBottom: '2px solid #f1ece8', paddingBottom: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>
-                      {category === 'Χέρια' ? '💅' : category === 'Πόδια' ? '👣' : '✨'} {category}
-                    </h4>
-                    
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {categoryServices.map(s => (
-                        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
-                          <div>
-                            <strong style={{ fontSize: '1.05rem', display: 'block' }}>{s.name}</strong>
-                            <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.95rem' }}>{Number(s.price).toFixed(2)}€</span>
-                            <span style={{ marginLeft: '15px', color: '#dc3545', fontWeight: '500', fontSize: '0.85rem' }}>⏱️ {s.duration_minutes} λεπτά</span>
-                            {s.description && (
-                              <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>{s.description}</p>
-                            )}
+                <div className="admin-form-row">
+                  <div className="admin-field">
+                    <label className="admin-label">Τιμή (€)</label>
+                    <input type="number" step="0.01" required className="admin-input" value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} />
+                  </div>
+                  <div className="admin-field">
+                    <label className="admin-label">Διάρκεια</label>
+                    <select className="admin-select" value={serviceForm.duration_minutes} onChange={e => setServiceForm({ ...serviceForm, duration_minutes: e.target.value })}>
+                      <option value="15">15 λεπτά</option>
+                      <option value="30">30 λεπτά</option>
+                      <option value="45">45 λεπτά</option>
+                      <option value="60">1 ώρα</option>
+                      <option value="90">1.5 ώρα</option>
+                      <option value="120">2 ώρες</option>
+                      <option value="150">2.5 ώρες</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="admin-form-actions">
+                  <button type="submit" className="admin-btn admin-btn-primary admin-btn-block">{serviceForm.id ? 'Αποθήκευση' : 'Δημιουργία'}</button>
+                  {serviceForm.id && <button type="button" className="admin-btn admin-btn-secondary" onClick={() => setServiceForm({ id: null, category: 'Χέρια', name: '', description: '', price: '', duration_minutes: 60 })}>Ακύρωση</button>}
+                </div>
+              </form>
+            </div>
+
+            <div className="admin-card">
+              <h3 className="admin-h" style={{ marginBottom: 18 }}>Κατάλογος υπηρεσιών</h3>
+              <div className="admin-stack">
+                {['Χέρια', 'Πόδια', 'Πρόσωπο'].map(category => {
+                  const categoryServices = services.filter(s => s.category === category);
+                  if (categoryServices.length === 0) return null;
+                  return (
+                    <div key={category}>
+                      <h4 style={{ color: 'var(--accent)', borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 14, fontSize: '0.95rem', fontWeight: 700 }}>{category}</h4>
+                      <div className="admin-stack" style={{ gap: 12 }}>
+                        {categoryServices.map(s => (
+                          <div key={s.id} className="admin-list-item-row" style={{ alignItems: 'flex-start' }}>
+                            <div>
+                              <strong style={{ fontSize: '0.95rem', display: 'block' }}>{s.name}</strong>
+                              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
+                                <strong style={{ color: 'var(--success)' }}>{Number(s.price).toFixed(2)}€</strong>
+                                <span className="admin-badge admin-badge-neutral"><IconClock size={11} /> {s.duration_minutes}λ</span>
+                              </div>
+                              {s.description && <p className="admin-cell-sub" style={{ marginTop: 6, fontStyle: 'italic' }}>{s.description}</p>}
+                            </div>
+                            <div className="admin-row-actions">
+                              <button className="admin-icon-btn" onClick={() => setServiceForm(s)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                              <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteService(s.id)} title="Διαγραφή"><IconTrash size={15} /></button>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => setServiceForm(s)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
-                            <button onClick={() => handleDeleteService(s.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).length > 0 && (
+                  <div>
+                    <h4 style={{ color: 'var(--ink-muted)', borderBottom: '1px solid var(--line)', paddingBottom: 8, marginBottom: 14, fontSize: '0.95rem', fontWeight: 700 }}>Άλλες υπηρεσίες</h4>
+                    <div className="admin-stack" style={{ gap: 12 }}>
+                      {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).map(s => (
+                        <div key={s.id} className="admin-list-item-row" style={{ alignItems: 'flex-start' }}>
+                          <div>
+                            <span className="admin-badge admin-badge-neutral">{s.category}</span>
+                            <strong style={{ fontSize: '0.95rem', display: 'block', marginTop: 6 }}>{s.name}</strong>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 4 }}>
+                              <strong style={{ color: 'var(--success)' }}>{Number(s.price).toFixed(2)}€</strong>
+                              <span className="admin-badge admin-badge-neutral"><IconClock size={11} /> {s.duration_minutes}λ</span>
+                            </div>
+                          </div>
+                          <div className="admin-row-actions">
+                            <button className="admin-icon-btn" onClick={() => setServiceForm(s)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                            <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteService(s.id)} title="Διαγραφή"><IconTrash size={15} /></button>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                );
-              })}
-              
-              {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).length > 0 && (
-                <div>
-                  <h4 style={{ color: '#6c757d', borderBottom: '2px solid #f1ece8', paddingBottom: '8px', marginBottom: '15px', fontSize: '1.2rem' }}>Άλλες Υπηρεσίες</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {services.filter(s => !['Χέρια', 'Πόδια', 'Πρόσωπο'].includes(s.category)).map(s => (
-                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', border: '1px solid #dee2e6', borderRadius: '10px' }}>
-                        <div>
-                          <span style={{ fontSize: '0.75rem', background: '#e9ecef', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', color: '#495057' }}>{s.category}</span>
-                          <strong style={{ fontSize: '1.05rem', display: 'block', marginTop: '5px' }}>{s.name}</strong>
-                          <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.95rem' }}>{Number(s.price).toFixed(2)}€</span>
-                          <span style={{ marginLeft: '15px', color: '#dc3545', fontWeight: '500', fontSize: '0.85rem' }}>⏱️ {s.duration_minutes} λεπτά</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button onClick={() => setServiceForm(s)} style={{ background: '#ffc107', color: '#212529', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>✏️</button>
-                          <button onClick={() => handleDeleteService(s.id)} style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>🗑️</button>
-                        </div>
-                      </div>
-                    ))}
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= ΣΤΑΤΙΣΤΙΚΑ ================= */}
+        {activeTab === 'stats' && (
+          <div className="admin-stack">
+            <div className="admin-card admin-flex-between">
+              <div>
+                <h3 className="admin-h">Φίλτρα αναλυτικής &amp; τζίρου</h3>
+                <p className="admin-subtle">Επίλεξε την περίοδο αναφοράς για τον υπολογισμό των δεικτών.</p>
+              </div>
+              <div className="admin-pill-group">
+                {['1m', '3m', '6m', '1y'].map(range => (
+                  <button key={range} className={`admin-pill${statsRange === range ? ' active' : ''}`} onClick={() => setStatsRange(range)}>
+                    {range === '1m' ? '1 μήνας' : range === '3m' ? '3μηνο' : range === '6m' ? '6μηνο' : '1 έτος'}
+                  </button>
+                ))}
+                <button className={`admin-pill${statsRange === 'custom' ? ' active' : ''}`} onClick={() => setStatsRange('custom')}>Προσαρμοσμένο</button>
+                {statsRange === 'custom' && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input type="date" className="admin-input" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
+                    <span className="admin-subtle">έως</span>
+                    <input type="date" className="admin-input" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {loadingStats ? <p className="admin-empty">Υπολογισμός δεδομένων…</p> : (
+              <>
+                <div className="admin-grid admin-grid-kpi">
+                  <div className="admin-kpi admin-kpi--success">
+                    <div className="admin-kpi-label">Συνολικά έσοδα</div>
+                    <div className="admin-kpi-value">{(Number(salesStats?.summary?.total_revenue || 0) + Number(appointmentStats?.summary?.realized_revenue || 0)).toFixed(2)}€</div>
+                    <p className="admin-kpi-note">E-shop: {Number(salesStats?.summary?.total_revenue || 0).toFixed(2)}€ · Ραντεβού: {Number(appointmentStats?.summary?.realized_revenue || 0).toFixed(2)}€</p>
+                  </div>
+                  <div className="admin-kpi">
+                    <div className="admin-kpi-label">Pipeline (μελλοντικά ραντεβού)</div>
+                    <div className="admin-kpi-value">{Number(appointmentStats?.summary?.future_revenue || 0).toFixed(2)}€</div>
+                    <p className="admin-kpi-note">Αξία κλεισμένων ραντεβού για το μέλλον.</p>
+                  </div>
+                  <div className="admin-kpi admin-kpi--info">
+                    <div className="admin-kpi-label">Παραγγελίες e-shop</div>
+                    <div className="admin-kpi-value">{salesStats?.summary?.total_orders || 0}</div>
+                    <p className="admin-kpi-note">Μέση αξία: {Number(salesStats?.summary?.average_order_value || 0).toFixed(2)}€</p>
+                  </div>
+                  <div className="admin-kpi admin-kpi--brand">
+                    <div className="admin-kpi-label">Ολοκληρωμένα ραντεβού</div>
+                    <div className="admin-kpi-value">{appointmentStats?.summary?.total_appointments || 0}</div>
+                    <p className="admin-kpi-note">Στην επιλεγμένη περίοδο αναφοράς.</p>
                   </div>
                 </div>
-              )}
-            </div>
+
+                <div className="admin-grid admin-grid-2col">
+                  <div className="admin-card">
+                    <h4 className="admin-h" style={{ marginBottom: 14 }}>Κορυφαία προϊόντα &amp; υπηρεσίες</h4>
+                    <span className="admin-eyebrow">Προϊόντα e-shop</span>
+                    {salesStats?.bestSellers?.length > 0 ? salesStats.bestSellers.map((p, idx) => (
+                      <div key={idx} className="admin-list-row">
+                        <span><span className="admin-list-rank">{idx + 1}.</span><strong>{p.product_name}</strong></span>
+                        <span className="admin-subtle">{p.total_quantity_sold} τεμ. · <strong style={{ color: 'var(--success)' }}>{Number(p.total_sales_value).toFixed(2)}€</strong></span>
+                      </div>
+                    )) : <p className="admin-empty">Καμία πώληση σε αυτή την περίοδο.</p>}
+
+                    <span className="admin-eyebrow" style={{ marginTop: 14, display: 'block' }}>Υπηρεσίες καταστήματος</span>
+                    {appointmentStats?.topServices?.length > 0 ? appointmentStats.topServices.map((s, idx) => (
+                      <div key={idx} className="admin-list-row">
+                        <span><span className="admin-list-rank">{idx + 1}.</span><strong>{s.service_name}</strong></span>
+                        <span className="admin-subtle">{s.times_booked} κρατήσεις · <strong style={{ color: 'var(--success)' }}>{Number(s.total_generated_revenue).toFixed(2)}€</strong></span>
+                      </div>
+                    )) : <p className="admin-empty">Κανένα ραντεβού σε αυτή την περίοδο.</p>}
+                  </div>
+
+                  <div className="admin-card">
+                    <h4 className="admin-h" style={{ marginBottom: 14 }}>Κορυφαίοι πελάτες</h4>
+                    <span className="admin-eyebrow">Κατά επισκέψεις (ραντεβού)</span>
+                    {appointmentStats?.frequentClients?.length > 0 ? appointmentStats.frequentClients.map((c, idx) => (
+                      <div key={idx} className="admin-list-row">
+                        <div>
+                          <strong>{c.client_name}</strong>
+                          <span className="admin-cell-sub">{c.client_phone}</span>
+                        </div>
+                        <span style={{ textAlign: 'right' }}>{c.visit_count} επισκέψεις<br /><strong style={{ color: 'var(--success)' }}>{Number(c.total_value).toFixed(2)}€</strong></span>
+                      </div>
+                    )) : <p className="admin-empty">Δεν υπάρχουν δεδομένα πελατών.</p>}
+
+                    <span className="admin-eyebrow" style={{ marginTop: 14, display: 'block' }}>Κατά αγορές (e-shop)</span>
+                    {salesStats?.topCustomers?.length > 0 ? salesStats.topCustomers.map((c, idx) => (
+                      <div key={idx} className="admin-list-row">
+                        <div>
+                          <strong>{c.client_name}</strong>
+                          <span className="admin-cell-sub">{c.client_email}</span>
+                        </div>
+                        <span style={{ textAlign: 'right' }}>{c.order_count} παραγγελίες<br /><strong style={{ color: 'var(--success)' }}>{Number(c.total_spent).toFixed(2)}€</strong></span>
+                      </div>
+                    )) : <p className="admin-empty">Δεν υπάρχουν δεδομένα αγορών.</p>}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB 6: ΣΤΑΤΙΣΤΙΚΑ (BI) */}
-      {activeTab === 'stats' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-          
-          {/* ΦΙΛΤΡΑ ΧΡΟΝΙΚΟΥ ΕΥΡΟΥΣ */}
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-            <div>
-              <h3 style={{ margin: 0, color: '#3b2b1f' }}>📊 Φίλτρα Αναλυτικής & Τζίρου</h3>
-              <p style={{ margin: '5px 0 0 0', color: '#6c757d', fontSize: '0.85rem' }}>Επίλεξε την περίοδο αναφοράς για τον υπολογισμό των KPIs.</p>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {['1m', '3m', '6m', '1y'].map(range => (
-                <button key={range} onClick={() => setStatsRange(range)} style={{ padding: '8px 16px', border: '1px solid #ced4da', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', background: statsRange === range ? '#3b2b1f' : '#fff', color: statsRange === range ? '#fff' : '#495057' }}>
-                  {range === '1m' ? '1 Μήνας' : range === '3m' ? '3μηνο' : range === '6m' ? '6μηνο' : '1 Έτος'}
-                </button>
-              ))}
-              <button onClick={() => setStatsRange('custom')} style={{ padding: '8px 16px', border: '1px solid #ced4da', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', background: statsRange === 'custom' ? '#3b2b1f' : '#fff', color: statsRange === 'custom' ? '#fff' : '#495057' }}>Προσαρμοσμένο</button>
-              
-              {statsRange === 'custom' && (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: '10px' }}>
-                  <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>έως</span>
-                  <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #ced4da' }} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {loadingStats ? <p style={{ textAlign: 'center', color: '#6c757d', fontWeight: 'bold' }}>🔄 Υπολογισμός και επεξεργασία δεδομένων BI...</p> : (
-            <>
-              {/* ΚΑΡΤΕΣ KPIs */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-                
-                <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderLeft: '5px solid #10b981' }}>
-                  <small style={{ color: '#6c757d', fontWeight: 'bold', textTransform: 'uppercase' }}>💰 Συνολικά Έσοδα (Πωλήσεις & Υπηρεσίες)</small>
-                  <h2 style={{ margin: '10px 0 0 0', fontSize: '1.8rem', color: '#212529' }}>
-                    {(Number(salesStats?.summary?.total_revenue || 0) + Number(appointmentStats?.summary?.realized_revenue || 0)).toFixed(2)}€
-                  </h2>
-                  <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#6c757d' }}>
-                    🛍️ E-shop: {Number(salesStats?.summary?.total_revenue || 0).toFixed(2)}€ | 💅 Πραγματοποιηθέντα Ραντεβού: {Number(appointmentStats?.summary?.realized_revenue || 0).toFixed(2)}€
-                  </p>
-                </div>
-
-                <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderLeft: '5px solid #bc9c82' }}>
-                  <small style={{ color: '#6c757d', fontWeight: 'bold', textTransform: 'uppercase' }}>📅 Pipeline (Μελλοντικά Ραντεβού)</small>
-                  <h2 style={{ margin: '10px 0 0 0', fontSize: '1.8rem', color: '#212529' }}>
-                    {Number(appointmentStats?.summary?.future_revenue || 0).toFixed(2)}€
-                  </h2>
-                  <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#6c757d' }}>
-                    Αξία κλεισμένων ραντεβού για το μέλλον (Booking Pipeline).
-                  </p>
-                </div>
-
-                <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', borderLeft: '5px solid #0d6efd' }}>
-                  <small style={{ color: '#6c757d', fontWeight: 'bold', textTransform: 'uppercase' }}>📦 Παραγγελίες E-shop</small>
-                  <h2 style={{ margin: '10px 0 0 0', fontSize: '1.8rem', color: '#212529' }}>{salesStats?.summary?.total_orders || 0} παραγγελίες</h2>
-                  <p style={{ margin: '5px 0 0 0', fontSize: '0.8rem', color: '#6c757d' }}>Μέση Αξία: {Number(salesStats?.summary?.average_order_value || 0).toFixed(2)}€</p>
+        {/* ================= ΠΕΛΑΤΕΣ ================= */}
+        {activeTab === 'users' && (
+          <div className={`admin-grid admin-grid-2fr1fr${selectedUserHistory ? ' split' : ''}`}>
+            <div className="admin-card">
+              <div className="admin-card-header">
+                <h3 className="admin-h">Εγγεγραμμένοι χρήστες ({users.length})</h3>
+                <div className="admin-search">
+                  <IconSearch size={15} />
+                  <input type="text" className="admin-input" placeholder="Αναζήτηση με όνομα, email ή τηλέφωνο…" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} style={{ width: 280 }} />
                 </div>
               </div>
-
-              {/* ΑΝΑΛΥΤΙΚΟΙ ΠΙΝΑΚΕΣ: BEST SELLERS & TOP ΠΕΛΑΤΕΣ */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '25px' }}>
-                
-                {/* ΠΙΝΑΚΑΣ 1: BEST SELLERS */}
-                <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#3b2b1f', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>🏆 Top 5 Προϊόντα & Υπηρεσίες (Best Sellers)</h4>
-                  
-                  <h5 style={{ margin: '10px 0 5px 0', color: '#0d6efd' }}>🛍️ Προϊόντα E-shop</h5>
-                  {salesStats?.bestSellers?.length > 0 ? salesStats.bestSellers.map((p, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      <span>👑 {idx+1}. <strong>{p.product_name}</strong></span>
-                      <span style={{ color: '#6c757d' }}>{p.total_quantity_sold} τεμ. (<span style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(p.total_sales_value).toFixed(2)}€</span>)</span>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Καμία πώληση σε αυτή την περίοδο.</p>}
-
-                  <h5 style={{ margin: '20px 0 5px 0', color: '#bc9c82' }}>💅 Υπηρεσίες Καταστήματος</h5>
-                  {appointmentStats?.topServices?.length > 0 ? appointmentStats.topServices.map((s, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      <span>⭐ {idx+1}. <strong>{s.service_name}</strong></span>
-                      <span style={{ color: '#6c757d' }}>{s.times_booked} κρατήσεις (<span style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(s.total_generated_revenue).toFixed(2)}€</span>)</span>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Κανένα ραντεβού σε αυτή την περίοδο.</p>}
-                </div>
-
-                {/* ΠΙΝΑΚΑΣ 2: TOP ΠΕΛΑΤΕΣ (VIP CLIENTS) */}
-                <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#3b2b1f', borderBottom: '2px solid #f1ece8', paddingBottom: '10px' }}>💎 VIP Πελάτες (Πιστότητα & Τζίρος)</h4>
-                  
-                  <h5 style={{ margin: '10px 0 5px 0', color: '#3b2b1f' }}>💖 Κορυφαίοι σε Επισκέψεις (Ραντεβού)</h5>
-                  {appointmentStats?.frequentClients?.length > 0 ? appointmentStats.frequentClients.map((c, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      <div>
-                        <strong>{c.client_name}</strong> <br />
-                        <small style={{ color: '#6c757d' }}>📱 {c.client_phone}</small>
-                      </div>
-                      <span style={{ textAlign: 'right', fontWeight: '500' }}>
-                        {c.visit_count} επισκέψεις <br />
-                        <small style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(c.total_value).toFixed(2)}€</small>
-                      </span>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Δεν υπάρχουν δεδομένα πελατών.</p>}
-
-                  <h5 style={{ margin: '20px 0 5px 0', color: '#3b2b1f' }}>🛒 Κορυφαίοι Αγοραστές (E-shop)</h5>
-                  {salesStats?.topCustomers?.length > 0 ? salesStats.topCustomers.map((c, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      <div>
-                        <strong>{c.client_name}</strong> <br />
-                        <small style={{ color: '#6c757d' }}>✉️ {c.client_email}</small>
-                      </div>
-                      <span style={{ textAlign: 'right', fontWeight: '500' }}>
-                        {c.order_count} παραγγελίες <br />
-                        <small style={{ color: '#10b981', fontWeight: 'bold' }}>{Number(c.total_spent).toFixed(2)}€</small>
-                      </span>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Δεν υπάρχουν δεδομένα αγορών.</p>}
-                </div>
-
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Στοιχεία</th>
+                      <th>Εγγραφή</th>
+                      <th style={{ textAlign: 'center' }}>Ραντεβού</th>
+                      <th style={{ textAlign: 'center' }}>Παραγγελίες</th>
+                      <th style={{ textAlign: 'right' }}>Ενέργειες</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users
+                      .filter(u =>
+                        u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                        u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                        u.phone.includes(userSearchTerm)
+                      )
+                      .map(u => (
+                        <tr key={u.id} className={selectedUserHistory?.user?.id === u.id ? 'is-flagged' : ''}>
+                          <td data-label="Στοιχεία">
+                            <strong>{u.name}</strong>
+                            <span className="admin-cell-sub">{u.email} · {u.phone}</span>
+                          </td>
+                          <td data-label="Εγγραφή">{formatLocalDate(u.created_at).split('-').reverse().join('/')}</td>
+                          <td data-label="Ραντεβού" style={{ textAlign: 'center' }}>{u.appointment_count}</td>
+                          <td data-label="Παραγγελίες" style={{ textAlign: 'center' }}>{u.order_count}</td>
+                          <td data-label="Ενέργειες" style={{ textAlign: 'right' }}>
+                            <button className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => fetchUserHistory(u)}>Ιστορικό</button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
-            </>
-          )}
-        </div>
-      )}
+            </div>
 
-      {/* TAB: ΙΣΤΟΡΙΚΟ ΧΡΗΣΤΩΝ */}
-      {activeTab === 'users' && (
-        <div style={{ display: 'grid', gridTemplateColumns: selectedUserHistory ? '1.2fr 1fr' : '1fr', gap: '25px' }}>
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-              <h3 style={{ margin: 0, color: '#3b2b1f' }}>Εγγεγραμμένοι Χρήστες ({users.length})</h3>
-              <input
-                type="text"
-                placeholder="🔍 Αναζήτηση με όνομα, email ή τηλέφωνο..."
-                value={userSearchTerm}
-                onChange={e => setUserSearchTerm(e.target.value)}
-                style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #ced4da', width: '300px' }}
+            {selectedUserHistory && (
+              <ClientHistoryPanel
+                label={selectedUserHistory.user.name}
+                appointments={selectedUserHistory.appointments}
+                orders={selectedUserHistory.orders}
+                loading={loadingUserHistory}
+                onClose={() => setSelectedUserHistory(null)}
+                formatLocalDate={formatLocalDate}
+              />
+            )}
+          </div>
+        )}
+
+        <ToastContainer position="top-right" autoClose={3000} style={{ zIndex: 999999 }} />
+
+        {confirmDialog.isOpen && (
+          <div className="pro-modal-overlay">
+            <div className="pro-modal" style={{ textAlign: 'center' }}>
+              <h3>{confirmDialog.title}</h3>
+              <p style={{ color: 'var(--ink-soft)', marginBottom: 25, lineHeight: 1.5 }}>{confirmDialog.message}</p>
+              <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
+                <button className="pro-btn primary" onClick={confirmDialog.onConfirm}>Ναι, επιβεβαίωση</button>
+                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })}>Άκυρο</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {phoneHistory && (
+          <div className="admin-panel-overlay" onClick={() => setPhoneHistory(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480 }}>
+              <ClientHistoryPanel
+                label={phoneHistory.label}
+                appointments={phoneHistory.appointments}
+                orders={phoneHistory.orders}
+                loading={loadingPhoneHistory}
+                onClose={() => setPhoneHistory(null)}
+                formatLocalDate={formatLocalDate}
               />
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f8f9fa', textAlign: 'left', borderBottom: '2px solid #dee2e6' }}>
-                  <th style={{ padding: '15px' }}>Στοιχεία</th>
-                  <th style={{ padding: '15px' }}>Εγγραφή</th>
-                  <th style={{ padding: '15px', textAlign: 'center' }}>Ραντεβού</th>
-                  <th style={{ padding: '15px', textAlign: 'center' }}>Παραγγελίες</th>
-                  <th style={{ padding: '15px', textAlign: 'right' }}>Ενέργειες</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users
-                  .filter(u =>
-                    u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                    u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                    u.phone.includes(userSearchTerm)
-                  )
-                  .map(u => (
-                    <tr key={u.id} style={{ borderBottom: '1px solid #dee2e6', background: selectedUserHistory?.user?.id === u.id ? '#f1ece8' : 'transparent' }}>
-                      <td style={{ padding: '15px' }}>
-                        <strong>{u.name}</strong><br />
-                        <small style={{ color: '#6c757d' }}>✉️ {u.email}<br />📱 {u.phone}</small>
-                      </td>
-                      <td style={{ padding: '15px' }}>{formatLocalDate(u.created_at).split('-').reverse().join('/')}</td>
-                      <td style={{ padding: '15px', textAlign: 'center' }}>{u.appointment_count}</td>
-                      <td style={{ padding: '15px', textAlign: 'center' }}>{u.order_count}</td>
-                      <td style={{ padding: '15px', textAlign: 'right' }}>
-                        <button onClick={() => fetchUserHistory(u)} style={{ background: '#3b2b1f', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>Ιστορικό</button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
           </div>
+        )}
 
-          {selectedUserHistory && (
-            <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', height: 'fit-content', borderTop: '4px solid #0d6efd' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <h4 style={{ margin: 0, color: '#3b2b1f' }}>📜 Ιστορικό: {selectedUserHistory.user.name}</h4>
-                <button onClick={() => setSelectedUserHistory(null)} style={{ background: '#e5e7eb', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer' }}>✖</button>
-              </div>
-
-              {loadingUserHistory ? <p style={{ textAlign: 'center', color: '#6c757d' }}>🔄 Φόρτωση ιστορικού...</p> : (
-                <>
-                  <h5 style={{ color: '#bc9c82', margin: '15px 0 10px 0' }}>💅 Ραντεβού ({selectedUserHistory.appointments?.length || 0})</h5>
-                  {selectedUserHistory.appointments?.length > 0 ? selectedUserHistory.appointments.map(a => (
-                    <div key={a.id} style={{ padding: '10px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      📅 {formatLocalDate(a.appointment_date).split('-').reverse().join('/')} ⏰ {a.appointment_time.slice(0, 5)} — <strong>{a.service_name}</strong>
-                      <br /><small style={{ color: a.status === 'completed' ? '#10b981' : a.status === 'cancelled' ? '#dc3545' : '#6c757d' }}>{a.status}</small>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Δεν υπάρχουν ραντεβού.</p>}
-
-                  <h5 style={{ color: '#0d6efd', margin: '20px 0 10px 0' }}>🛍️ Παραγγελίες ({selectedUserHistory.orders?.length || 0})</h5>
-                  {selectedUserHistory.orders?.length > 0 ? selectedUserHistory.orders.map(o => (
-                    <div key={o.id} style={{ padding: '10px 0', borderBottom: '1px solid #eee', fontSize: '0.9rem' }}>
-                      #{o.id} — <strong style={{ color: '#10b981' }}>{Number(o.total_amount).toFixed(2)}€</strong><br />
-                      <small style={{ color: '#6c757d' }}>{new Date(o.created_at).toLocaleDateString('el-GR')} · {o.status}</small>
-                    </div>
-                  )) : <p style={{ fontSize: '0.85rem', color: '#6c757d', fontStyle: 'italic' }}>Δεν υπάρχουν παραγγελίες.</p>}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      <ToastContainer position="top-right" autoClose={3000} style={{zIndex: 999999 }}/>
-      
-      {confirmDialog.isOpen && (
-        <div className="pro-modal-overlay">
-          <div className="pro-modal" style={{ textAlign: 'center' }}>
-            <h3 style={{ color: '#3b2b1f', marginBottom: '15px' }}>{confirmDialog.title}</h3>
-            <p style={{ color: '#495057', marginBottom: '25px', lineHeight: '1.5' }}>{confirmDialog.message}</p>
-            <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="pro-btn primary" onClick={confirmDialog.onConfirm}>Ναι, Επιβεβαίωση</button>
-              <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })}>Άκυρο</button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      </main>
     </div>
   );
 }

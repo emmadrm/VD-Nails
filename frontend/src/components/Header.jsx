@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import VDLogo from '../assets/VD-Logo.png';
+import VDLogo from '../assets/Vdnails_logo.PNG';
 import CartSidebar from './CartSidebar';
 import '../index.css';
 

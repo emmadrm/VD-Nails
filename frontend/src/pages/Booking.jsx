@@ -136,12 +136,12 @@ export default function Booking() {
   });
 
   const [formData, setFormData] = useState({
-    serviceId: '',
-    date: null, 
+    date: null,
     time: '',
     payment: 'store'
   });
 
+  const [selectedServiceIds, setSelectedServiceIds] = useState([]);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -157,13 +157,23 @@ export default function Booking() {
             const categoryServices = data.filter(s => s.category === stateCategory);
             if (categoryServices.length > 0) initialId = categoryServices[0].id.toString();
         }
-        setFormData(prev => ({ ...prev, serviceId: initialId }));
+        setSelectedServiceIds(initialId ? [initialId] : []);
       })
       .catch(err => console.error(err));
   }, [stateCategory, serviceName]);
 
+  const selectedServiceObjs = dbServices.filter(s => selectedServiceIds.includes(s.id.toString()));
+  const totalDuration = selectedServiceObjs.reduce((sum, s) => sum + parseInt(s.duration_minutes || 0), 0);
+  const totalPrice = selectedServiceObjs.reduce((sum, s) => sum + Number(s.price || 0), 0);
+
+  const toggleService = (id) => {
+    const idStr = id.toString();
+    setSelectedServiceIds(prev => prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]);
+    setFormData(prev => ({ ...prev, time: '' }));
+  };
+
   useEffect(() => {
-    if (!formData.date || !formData.serviceId || dbServices.length === 0) return;
+    if (!formData.date || selectedServiceIds.length === 0 || dbServices.length === 0) return;
 
     setLoadingTimes(true);
     const year = formData.date.getFullYear();
@@ -171,15 +181,16 @@ export default function Booking() {
     const day = String(formData.date.getDate()).padStart(2, '0');
     const formattedDate = `${year}-${month}-${day}`;
 
-    const currentService = dbServices.find(s => s.id.toString() === formData.serviceId);
-    const currentDuration = currentService ? parseInt(currentService.duration_minutes) : 60;
+    const currentDuration = totalDuration || 60;
 
-    fetch(`${API_URL}/api/booked-times?date=${formattedDate}`)
-      .then(res => res.json())
-      .then(bookedSlots => {
-        const startDay = timeToMinutes("09:00");
-        const endDay = timeToMinutes("21:00");
-        
+    Promise.all([
+      fetch(`${API_URL}/api/booked-times?date=${formattedDate}`).then(res => res.json()),
+      fetch(`${API_URL}/api/business-hours/${formattedDate}`).then(res => res.json())
+    ])
+      .then(([bookedSlots, businessHours]) => {
+        const startDay = timeToMinutes(businessHours.open_time);
+        const endDay = timeToMinutes(businessHours.close_time);
+
         const now = new Date();
         const isToday = formData.date.toDateString() === now.toDateString();
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -191,13 +202,13 @@ export default function Booking() {
 
           const proposedStart = minutes;
           const proposedEnd = minutes + currentDuration;
-          
+
           if (proposedEnd > endDay) continue;
 
           let isOverlap = false;
           for (let booked of bookedSlots) {
             if (!booked.time) continue;
-            
+
             const bookedStart = timeToMinutes(booked.time);
             const bookedEnd = bookedStart + booked.duration;
 
@@ -216,42 +227,32 @@ export default function Booking() {
         console.error(err);
         setLoadingTimes(false);
       });
-  }, [formData.date, formData.serviceId, dbServices]);
+  }, [formData.date, selectedServiceIds, dbServices]);
 
-  const availableServices = stateCategory
-    ? dbServices.filter(s => s.category === stateCategory)
-    : dbServices;
-
-  const groupedServices = !stateCategory
-    ? availableServices.reduce((acc, srv) => {
-        (acc[srv.category] = acc[srv.category] || []).push(srv);
-        return acc;
-      }, {})
-    : null;
-
-  const selectedServiceObj = dbServices.find(s => s.id.toString() === formData.serviceId);
+  const groupedServices = dbServices.reduce((acc, srv) => {
+    (acc[srv.category] = acc[srv.category] || []).push(srv);
+    return acc;
+  }, {});
 
   const handleClientChange = (e) => {
     setClientData({ ...clientData, [e.target.name]: e.target.value });
   };
 
   const getBookingPayload = () => {
-    if (!selectedServiceObj || !formData.date) return {};
+    if (selectedServiceObjs.length === 0 || !formData.date) return {};
 
     const year = formData.date.getFullYear();
     const month = String(formData.date.getMonth() + 1).padStart(2, '0');
     const day = String(formData.date.getDate()).padStart(2, '0');
-    const localFormattedDate = `${year}-${month}-${day}`; 
+    const localFormattedDate = `${year}-${month}-${day}`;
 
     return {
-      user_id: storedUser.id || null, // 2. ΔΙΟΡΘΩΣΗ: Προσθήκη του user_id
+      user_id: storedUser.id || null,
       client_name: clientData.name,
       client_email: clientData.email,
       client_phone: clientData.phone,
-      service_id: selectedServiceObj.id,
-      service_name: selectedServiceObj.name,
-      service_price: selectedServiceObj.price, // 3. ΔΙΟΡΘΩΣΗ: Προσθήκη του κόστους της υπηρεσίας
-      appointment_date: localFormattedDate, 
+      services: selectedServiceObjs.map(s => ({ name: s.name, price: Number(s.price), duration_minutes: parseInt(s.duration_minutes) })),
+      appointment_date: localFormattedDate,
       appointment_time: formData.time,
       payment_method: formData.payment,
       payment_status: formData.payment === 'store' ? 'completed' : 'pending' // 4. ΔΙΟΡΘΩΣΗ: 'completed' για κατάστημα, 'pending' προσωρινά για κάρτα
@@ -260,8 +261,9 @@ export default function Booking() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const newErrors = {};
+    if (selectedServiceIds.length === 0) newErrors.service = t('booking.errorNoService');
     if (!formData.time) newErrors.time = t('booking.errorTime');
     if (clientData.name.trim().split(/\s+/).length < 2) newErrors.name = t('booking.errorName');
     if (!/^\d{10}$/.test(clientData.phone)) newErrors.phone = t('booking.errorPhone');
@@ -343,24 +345,30 @@ export default function Booking() {
           </div>
 
           <div>
-            <select name="serviceId" value={formData.serviceId} className="form-control vd-input mb-3" disabled={showStripeForm} onChange={(e) => setFormData({...formData, serviceId: e.target.value})} required>
-              {groupedServices ? (
-                <>
-                  <option value="" disabled>{t('booking.selectService')}</option>
-                  {Object.entries(groupedServices).map(([category, services]) => (
-                    <optgroup key={category} label={category}>
-                      {services.map(srv => (
-                        <option key={srv.id} value={srv.id}>{srv.name} ({Number(srv.price).toFixed(2)}€)</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </>
-              ) : (
-                availableServices.map(srv => (
-                  <option key={srv.id} value={srv.id}>{srv.name} ({Number(srv.price).toFixed(2)}€)</option>
-                ))
-              )}
-            </select>
+            <label className="fw-bold mb-2 d-block">{t('booking.selectServices')}</label>
+            {errors.service && <div className="text-danger small mb-2">{errors.service}</div>}
+            {Object.entries(groupedServices).map(([category, categoryServices]) => (
+              <div key={category} className="service-select-group">
+                <div className="service-select-group-title">{category}</div>
+                {categoryServices.map(srv => (
+                  <button
+                    key={srv.id}
+                    type="button"
+                    disabled={showStripeForm}
+                    onClick={() => toggleService(srv.id)}
+                    className={`service-select-chip${selectedServiceIds.includes(srv.id.toString()) ? ' selected' : ''}`}
+                  >
+                    {srv.name} ({Number(srv.price).toFixed(2)}€)
+                  </button>
+                ))}
+              </div>
+            ))}
+            {selectedServiceObjs.length > 0 && (
+              <div className="service-select-summary mb-3">
+                <span>{selectedServiceObjs.length} {t('booking.servicesSelected')}</span>
+                <span>{t('booking.total')}: {totalPrice.toFixed(2)}€ · {totalDuration}λ</span>
+              </div>
+            )}
 
             <DatePicker
               selected={formData.date}
@@ -405,9 +413,9 @@ export default function Booking() {
             </div>
           )}
 
-          {showStripeForm && selectedServiceObj ? (
+          {showStripeForm && selectedServiceObjs.length > 0 ? (
             <Elements stripe={stripePromise}>
-              <AppointmentPaymentForm totalAmount={selectedServiceObj.price} payload={getBookingPayload()} setIsSubmitting={setIsSubmitting} isSubmitting={isSubmitting} />
+              <AppointmentPaymentForm totalAmount={totalPrice} payload={getBookingPayload()} setIsSubmitting={setIsSubmitting} isSubmitting={isSubmitting} />
             </Elements>
           ) : (
             <button type="submit" disabled={isSubmitting} className="pay-now-btn">

@@ -111,6 +111,27 @@ const sendBrevoTemplateEmail = async (toEmail, toName, templateId, params) => {
   } catch (err) {console.error(err.message)};
 };
 
+const sendBrevoSms = async (phone, content) => {
+  try {
+    const digits = String(phone).replace(/\D/g, '');
+    const recipient = digits.startsWith('30') ? digits : `30${digits}`;
+    const response = await fetch('https://api.brevo.com/v3/transactionalSMS/sms', {
+      method: 'POST',
+      headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_API_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: process.env.BREVO_SMS_SENDER || 'VDNails',
+        recipient,
+        content,
+        type: 'transactional'
+      })
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`Brevo SMS failed: ${response.status} ${response.statusText} - ${body}`);
+    }
+  } catch (err) { console.error(err.message); }
+};
+
 const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SENDER_EMAIL;
   if (!senderEmail) {
@@ -205,6 +226,15 @@ app.post('/api/admin/orders/update-shipment', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.put('/api/admin/orders/:id/tracking', verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { tracking_link } = req.body;
+  try {
+    await pool.query('UPDATE orders SET tracking_link = $1 WHERE id = $2', [tracking_link, id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const timeToMinutes = (timeStr) => {
   const [h, m] = timeStr.split(':').map(Number);
   return h * 60 + m;
@@ -235,6 +265,66 @@ const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = nu
   });
 };
 
+const computeServiceTotals = (services) => {
+  const name = services.map(s => s.name).join(', ');
+  const price = services.reduce((sum, s) => sum + Number(s.price || 0), 0);
+  const duration = services.reduce((sum, s) => sum + parseInt(s.duration_minutes || s.duration || 0), 0);
+  return { name, price, duration };
+};
+
+const DEFAULT_OPEN_TIME = '10:00';
+const DEFAULT_CLOSE_TIME = '20:00';
+
+const getEffectiveHours = async (date) => {
+  const override = await pool.query('SELECT open_time, close_time FROM business_hours WHERE date = $1', [date]);
+  if (override.rows[0]) {
+    return { open_time: override.rows[0].open_time.slice(0, 5), close_time: override.rows[0].close_time.slice(0, 5), is_override: true };
+  }
+  return { open_time: DEFAULT_OPEN_TIME, close_time: DEFAULT_CLOSE_TIME, is_override: false };
+};
+
+const isWithinBusinessHours = async (date, time, durationMinutes) => {
+  const hours = await getEffectiveHours(date);
+  const startMinutes = timeToMinutes(time);
+  const endMinutes = startMinutes + durationMinutes;
+  return startMinutes >= timeToMinutes(hours.open_time) && endMinutes <= timeToMinutes(hours.close_time);
+};
+
+app.get('/api/business-hours/:date', async (req, res) => {
+  try {
+    const hours = await getEffectiveHours(req.params.date);
+    res.json({ date: req.params.date, ...hours });
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.get('/api/admin/business-hours', verifyAdmin, async (req, res) => {
+  const { startDate, endDate } = req.query;
+  try {
+    const result = await pool.query('SELECT * FROM business_hours WHERE date BETWEEN $1 AND $2 ORDER BY date ASC', [startDate, endDate]);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.post('/api/admin/business-hours', verifyAdmin, async (req, res) => {
+  const { date, open_time, close_time } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO business_hours (date, open_time, close_time) VALUES ($1, $2, $3)
+       ON CONFLICT (date) DO UPDATE SET open_time = $2, close_time = $3
+       RETURNING *`,
+      [date, open_time, close_time]
+    );
+    res.json({ success: true, businessHours: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/business-hours/:date', verifyAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM business_hours WHERE date = $1', [req.params.date]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/appointments/check-availability', async (req, res) => {
   const { date, time, service_name, duration } = req.query;
   try {
@@ -245,9 +335,28 @@ app.get('/api/appointments/check-availability', async (req, res) => {
 });
 
 app.post('/api/appointments/direct', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_method, duration, stripe_payment_intent_id } = req.body;
+  const { user_id, client_name, client_email, client_phone, services, appointment_date, appointment_time, payment_method, duration, stripe_payment_intent_id } = req.body;
+  let { service_name, service_price } = req.body;
   try {
-    const effectiveDuration = await getEffectiveDuration(service_name, duration);
+    let effectiveDuration;
+    if (services && services.length) {
+      const totals = computeServiceTotals(services);
+      service_name = totals.name;
+      service_price = totals.price;
+      effectiveDuration = totals.duration;
+    } else {
+      effectiveDuration = await getEffectiveDuration(service_name, duration);
+    }
+
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+      if (stripe_payment_intent_id) {
+        try { await stripe.refunds.create({ payment_intent: stripe_payment_intent_id }); }
+        catch (refundErr) { console.error('Refund failed:', refundErr); }
+        return res.status(409).json({ error: "Η ώρα αυτή είναι εκτός ωραρίου λειτουργίας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." });
+      }
+      return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
+    }
+
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration);
 
     if (overlap) {
@@ -285,21 +394,14 @@ app.post('/api/appointments/direct', async (req, res) => {
     const result = await pool.query(query, values);
 
     if(client_name !== "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ") {
-      const formattedDateForEmail = appointment_date.split('-').reverse().join('/');
-      sendBrevoTemplateEmail(client_email, client_name, 3, { 
-        client_name, 
-        appointment_date: formattedDateForEmail, 
-        appointment_time, 
-        appointment_id: `VD-${result.rows[0].id}`, 
-        service_name, 
-        service_cost: `${Number(service_price).toFixed(2)}€`, 
-        customer_phone: client_phone 
-      });
+      const formattedDateForSms = appointment_date.split('-').reverse().join('/');
+      const smsContent = `VD Nails: Το ραντεβού σας VD-${result.rows[0].id} (${service_name}) επιβεβαιώθηκε για ${formattedDateForSms} στις ${appointment_time}. Σας περιμένουμε!`;
+      sendBrevoSms(client_phone, smsContent);
     }
     return res.json({ success: true });
-  } catch (err) { 
-    console.error("SQL Error:", err); 
-    return res.status(500).json({ error: "Σφάλμα στη βάση δεδομένων" }); 
+  } catch (err) {
+    console.error("SQL Error:", err);
+    return res.status(500).json({ error: "Σφάλμα στη βάση δεδομένων" });
   }
 });
 
@@ -327,6 +429,9 @@ app.put('/api/appointments/:id', async (req, res) => {
     if (existing.rows.length === 0) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
 
     const effectiveDuration = await getEffectiveDuration(existing.rows[0].service_name, existing.rows[0].duration);
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+      return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
+    }
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
     if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
 
@@ -337,16 +442,36 @@ app.put('/api/appointments/:id', async (req, res) => {
 
 app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
   const { id } = req.params;
-  const { client_name, client_phone, client_email, service_name, appointment_date, appointment_time } = req.body;
+  const { client_name, client_phone, client_email, services, appointment_date, appointment_time } = req.body;
+  let { service_name, service_price } = req.body;
   try {
-    const effectiveDuration = await getEffectiveDuration(service_name, null);
+    let effectiveDuration;
+    if (services && services.length) {
+      const totals = computeServiceTotals(services);
+      service_name = totals.name;
+      service_price = totals.price;
+      effectiveDuration = totals.duration;
+    } else {
+      effectiveDuration = await getEffectiveDuration(service_name, null);
+    }
+
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+      return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
+    }
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
     if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
 
-    await pool.query(
-      'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7 WHERE id=$8',
-      [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, id]
-    );
+    if (services && services.length) {
+      await pool.query(
+        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5, appointment_date=$6, appointment_time=$7, duration=$8 WHERE id=$9',
+        [client_name, client_phone, client_email, service_name, service_price, appointment_date, appointment_time, effectiveDuration, id]
+      );
+    } else {
+      await pool.query(
+        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7 WHERE id=$8',
+        [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, id]
+      );
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -572,6 +697,20 @@ app.get('/api/admin/users/:id/history', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
+app.get('/api/admin/history-by-phone/:phone', verifyAdmin, async (req, res) => {
+  try {
+    const apts = await pool.query(
+      "SELECT * FROM appointments WHERE regexp_replace(client_phone, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') ORDER BY appointment_date DESC, appointment_time DESC",
+      [req.params.phone]
+    );
+    const ords = await pool.query(
+      "SELECT * FROM orders WHERE regexp_replace(client_phone, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') ORDER BY created_at DESC",
+      [req.params.phone]
+    );
+    res.json({ appointments: apts.rows, orders: ords.rows });
+  } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
 app.get('/api/admin/stats/sales', verifyAdmin, async (req, res) => {
   const { startDate, endDate } = req.query;
   try {
@@ -648,6 +787,8 @@ Sentry.setupExpressErrorHandler(app);
 
 
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ Server running on port ${PORT}`);
+pool.initDatabase().finally(() => {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`✅ Server running on port ${PORT}`);
+  });
 });

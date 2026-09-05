@@ -16,11 +16,11 @@ function Footer() {
             <div style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
               <div className="footer-hours-row">
                 <span>{t('footer.tuesdayFriday')}</span>
-                <strong>09:00 - 21:00</strong>
+                <strong>10:00 - 20:00</strong>
               </div>
               <div className="footer-hours-row">
                 <span>{t('footer.saturday')}</span>
-                <strong>09:00 - 21:00</strong>
+                <strong>10:00 - 18:00</strong>
               </div>
               <div className="footer-hours-row" style={{ borderBottom: 'none', marginBottom: 0 }}>
                 <span>{t('footer.closedDays')}</span>
@@ -49,17 +49,26 @@ function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    📍 {t('footer.address')}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="footer-contact-icon">
+                      <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6"/>
+                    </svg>
+                    {t('footer.address')}
                   </a>
                 </li>
                 <li className="mb-2">
                   <a href="tel:+306909386660">
-                    📞 +30 6909386660
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="footer-contact-icon">
+                      <path d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .644.178l2.189-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.795c.829.645.905 1.87.163 2.611l-.799.8c-.745.746-1.837 1.066-2.877.766-2.94-.845-5.583-2.437-7.727-4.581C2.35 9.792.759 7.148-.086 4.208c-.3-1.04-.02-2.13.726-2.876z"/>
+                    </svg>
+                    +30 6909386660
                   </a>
                 </li>
                 <li className="mb-3">
                   <a href="mailto:info@vdnails.gr">
-                    ✉️ info@vdnails.gr
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="footer-contact-icon">
+                      <path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414zM0 4.697v7.104l5.803-3.558zM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586zm3.436-.586L16 11.801V4.697z"/>
+                    </svg>
+                    info@vdnails.gr
                   </a>
                 </li>
               </ul>
