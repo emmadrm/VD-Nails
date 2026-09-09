@@ -59,6 +59,7 @@ export default function Admin() {
 
   // Ιστορικό Χρηστών
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [newCustomerForm, setNewCustomerForm] = useState(null);
   const [selectedUserHistory, setSelectedUserHistory] = useState(null);
   const [loadingUserHistory, setLoadingUserHistory] = useState(false);
 
@@ -197,6 +198,26 @@ export default function Admin() {
       if (!res.ok) return handleAuthError(res.status);
       setUsers(await res.json());
     } catch (err) { toast.error("Σφάλμα φόρτωσης χρηστών."); }
+  };
+
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+    if (!newCustomerForm.name.trim() || !/^\d{10}$/.test(newCustomerForm.phone)) {
+      return toast.error("Συμπληρώστε όνομα και τηλέφωνο (10 ψηφία).");
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/admin/users`, {
+        method: 'POST', headers: getJsonHeaders(),
+        body: JSON.stringify({ name: newCustomerForm.name, phone: newCustomerForm.phone })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Σφάλμα δημιουργίας πελάτη.");
+      }
+      toast.success("Ο πελάτης δημιουργήθηκε! Θα εμφανίζεται στην αναζήτηση όταν κλείνεις ραντεβού για λογαριασμό του.");
+      setNewCustomerForm(null);
+      fetchUsers();
+    } catch (err) { toast.error(err.message || "Σφάλμα δημιουργίας πελάτη."); }
   };
 
   const fetchUserHistory = async (user) => {
@@ -952,9 +973,12 @@ export default function Admin() {
             <div className="admin-card">
               <div className="admin-card-header">
                 <h3 className="admin-h">Εγγεγραμμένοι χρήστες ({users.length})</h3>
-                <div className="admin-search">
-                  <IconSearch size={15} />
-                  <input type="text" className="admin-input" placeholder="Αναζήτηση με όνομα, email ή τηλέφωνο…" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} style={{ width: 280 }} />
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div className="admin-search">
+                    <IconSearch size={15} />
+                    <input type="text" className="admin-input" placeholder="Αναζήτηση με όνομα, email ή τηλέφωνο…" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} style={{ width: 280 }} />
+                  </div>
+                  <button className="admin-btn admin-btn-primary" onClick={() => setNewCustomerForm({ name: '', phone: '' })}>Νέος πελάτης</button>
                 </div>
               </div>
               <div className="admin-table-wrap">
@@ -972,14 +996,15 @@ export default function Admin() {
                     {users
                       .filter(u =>
                         u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
-                        u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                        (u.email || '').toLowerCase().includes(userSearchTerm.toLowerCase()) ||
                         u.phone.includes(userSearchTerm)
                       )
                       .map(u => (
                         <tr key={u.id} className={selectedUserHistory?.user?.id === u.id ? 'is-flagged' : ''}>
                           <td data-label="Στοιχεία">
                             <strong>{u.name}</strong>
-                            <span className="admin-cell-sub">{u.email} · {u.phone}</span>
+                            <span className="admin-cell-sub">{u.email || 'Χωρίς λογαριασμό'} · {u.phone}</span>
+                            {!u.has_account && <span className="admin-badge admin-badge-neutral" style={{ marginTop: 4 }}>Πρόχειρη καταχώρηση</span>}
                           </td>
                           <td data-label="Εγγραφή">{formatLocalDate(u.created_at).split('-').reverse().join('/')}</td>
                           <td data-label="Ραντεβού" style={{ textAlign: 'center' }}>{u.appointment_count}</td>
@@ -1033,6 +1058,31 @@ export default function Admin() {
                 onClose={() => setPhoneHistory(null)}
                 formatLocalDate={formatLocalDate}
               />
+            </div>
+          </div>
+        )}
+
+        {newCustomerForm && (
+          <div className="admin-panel-overlay" onClick={() => setNewCustomerForm(null)}>
+            <div className="admin-panel" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+              <div className="admin-panel-header">
+                <h4 className="admin-h">Νέος πελάτης</h4>
+                <button className="admin-icon-btn" onClick={() => setNewCustomerForm(null)}><IconX size={15} /></button>
+              </div>
+              <p className="admin-subtle" style={{ marginBottom: 18 }}>
+                Καταχώρησε όνομα και τηλέφωνο — θα εμφανίζεται στην αναζήτηση όταν κλείνεις ραντεβού για λογαριασμό του. Αν αργότερα φτιάξει ο ίδιος λογαριασμό με το ίδιο τηλέφωνο, θα συνδεθεί αυτόματα με αυτή την καταχώρηση.
+              </p>
+              <form onSubmit={handleCreateCustomer} className="admin-form">
+                <div className="admin-field">
+                  <label className="admin-label">Όνομα</label>
+                  <input type="text" className="admin-input" required value={newCustomerForm.name} onChange={e => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })} />
+                </div>
+                <div className="admin-field">
+                  <label className="admin-label">Τηλέφωνο</label>
+                  <input type="tel" className="admin-input" required value={newCustomerForm.phone} onChange={e => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })} />
+                </div>
+                <button type="submit" className="admin-btn admin-btn-primary admin-btn-block">Δημιουργία</button>
+              </form>
             </div>
           </div>
         )}

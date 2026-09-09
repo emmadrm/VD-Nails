@@ -68,6 +68,9 @@ const initDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Δεν στέλνουμε πλέον email επιβεβαίωσης για ραντεβού (μόνο SMS) — επιτρέπουμε το email
+    // να λείπει, ώστε ο admin να μπορεί να κλείνει ραντεβού για πελάτες χωρίς λογαριασμό/email ακόμα.
+    await pool.query(`ALTER TABLE appointments ALTER COLUMN client_email DROP NOT NULL;`);
 
     // 4. ΠΙΝΑΚΑΣ: Υπηρεσίες (Περιλαμβάνει πλέον description)
     await pool.query(`
@@ -114,6 +117,10 @@ const initDatabase = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    // Επιτρέπουμε "πελάτες-πρόχειρα" (δημιουργημένους από τον admin, με όνομα+τηλέφωνο μόνο):
+    // χωρίς email/κωδικό δεν μπορούν να συνδεθούν, μέχρι να κάνουν οι ίδιοι εγγραφή.
+    await pool.query(`ALTER TABLE users ALTER COLUMN email DROP NOT NULL;`);
+    await pool.query(`ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS password_reset_tokens (

@@ -344,13 +344,13 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                       <div style={{ position: 'absolute', zIndex: 10, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', maxHeight: 180, overflowY: 'auto', width: '100%', boxShadow: 'var(--shadow)' }}>
                         {users.filter(u =>
                           u.name.toLowerCase().includes(entryPopover.clientSearch.toLowerCase()) ||
-                          u.email.toLowerCase().includes(entryPopover.clientSearch.toLowerCase()) ||
+                          (u.email || '').toLowerCase().includes(entryPopover.clientSearch.toLowerCase()) ||
                           u.phone.includes(entryPopover.clientSearch)
                         ).slice(0, 8).map(u => (
                           <div key={u.id} onClick={() => setEntryPopover({ ...entryPopover, selectedUserId: u.id, clientSearch: `${u.name} (${u.phone})` })}
                             style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--line-soft)' }}>
                             <strong style={{ fontSize: '0.87rem' }}>{u.name}</strong>
-                            <span className="admin-cell-sub">{u.email} · {u.phone}</span>
+                            <span className="admin-cell-sub">{u.email || 'Χωρίς λογαριασμό'} · {u.phone}</span>
                           </div>
                         ))}
                       </div>

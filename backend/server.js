@@ -573,8 +573,30 @@ app.post('/api/register', async (req, res) => {
   const { name, email, phone, password } = req.body;
   try {
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = await pool.query(`INSERT INTO users (name, email, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, phone`, [name, email, phone, passwordHash]);
-    const user = result.rows[0];
+
+    // Αν ο admin έχει ήδη δημιουργήσει αυτόν τον πελάτη (όνομα+τηλέφωνο, χωρίς λογαριασμό ακόμα),
+    // ολοκληρώνουμε ΤΗΝ ΙΔΙΑ εγγραφή αντί να φτιάξουμε διπλότυπο — έτσι το ιστορικό ραντεβού
+    // που έχει ήδη καταχωρηθεί στο όνομά του παραμένει συνδεδεμένο.
+    const stub = await pool.query(
+      "SELECT id FROM users WHERE password_hash IS NULL AND regexp_replace(phone, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')",
+      [phone]
+    );
+
+    let user;
+    if (stub.rows.length > 0) {
+      const result = await pool.query(
+        `UPDATE users SET name = $1, email = $2, phone = $3, password_hash = $4 WHERE id = $5 RETURNING id, name, email, phone`,
+        [name, email, phone, passwordHash, stub.rows[0].id]
+      );
+      user = result.rows[0];
+    } else {
+      const result = await pool.query(
+        `INSERT INTO users (name, email, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, phone`,
+        [name, email, phone, passwordHash]
+      );
+      user = result.rows[0];
+    }
+
     const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
     res.json({ success: true, token, user });
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
@@ -677,6 +699,7 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.name, u.email, u.phone, u.created_at,
+        (u.password_hash IS NOT NULL) as has_account,
         COUNT(DISTINCT a.id) as appointment_count,
         COUNT(DISTINCT o.id) as order_count
       FROM users u
@@ -687,6 +710,26 @@ app.get('/api/admin/users', verifyAdmin, async (req, res) => {
     `);
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
+});
+
+app.post('/api/admin/users', verifyAdmin, async (req, res) => {
+  const { name, phone } = req.body;
+  if (!name || !phone) return res.status(400).json({ error: "Όνομα και τηλέφωνο είναι υποχρεωτικά." });
+  try {
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE regexp_replace(phone, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')",
+      [phone]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: "Υπάρχει ήδη πελάτης με αυτό το τηλέφωνο." });
+    }
+    const result = await pool.query(
+      `INSERT INTO users (name, phone, email, password_hash) VALUES ($1, $2, NULL, NULL)
+       RETURNING id, name, email, phone, created_at, (password_hash IS NOT NULL) as has_account`,
+      [name, phone]
+    );
+    res.json({ success: true, user: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/admin/users/:id/history', verifyAdmin, async (req, res) => {

@@ -4,15 +4,36 @@ import store from '../assets/store.JPG';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+const ShieldIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" />
+    <path d="M9 12l2 2 4-4" />
+  </svg>
+);
+
+const NailFileIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="7" y="2" width="10" height="20" rx="4" />
+    <path d="M9.5 7.5h5M9.5 11.5h5M9.5 15.5h5" />
+  </svg>
+);
+
+const SparkleIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+  </svg>
+);
+
 function Home() {
   const { t } = useTranslation();
   return (
     <div>
-      <div className="home-hero-split">
-        <div className="home-hero-text">
-          <p className="home-hero-eyebrow">{t('home.eyebrow')}</p>
-          <h1 className="home-hero-title">{t('home.title')}</h1>
-          <p className="home-hero-subtitle">{t('home.subtitle')}</p>
+      <div className="home-ed-hero">
+        <img src={store} className="home-ed-hero-img" alt="VD Nails Space" />
+        <div className="home-ed-hero-overlay">
+          <p className="home-ed-hero-eyebrow">{t('home.eyebrow')}</p>
+          <h1 className="home-ed-hero-title">{t('home.title')}</h1>
+          <p className="home-ed-hero-desc">{t('home.description')}</p>
 
           {/*
           <div className="button-container home-hero-btn-container">
@@ -28,19 +49,50 @@ function Home() {
             </svg>
           </div>
           */}
-
-
         </div>
-        
-        <div className="home-hero-image-wrap">
-          <div className="home-hero-blob"></div>
-          <img src={store} className="home-hero-image" alt="VD Nails Space" />
+      </div>
+
+      <div className="home-ed-compact">
+        <div className="home-ed-compact-header">
+          <p className="home-ed-compact-eyebrow">{t('home.whyEyebrow')}</p>
+          <h2 className="home-ed-compact-title">{t('home.whyTitle')}</h2>
+        </div>
+        <div className="home-ed-compact-row">
+          <div className="home-ed-compact-card">
+            <span className="home-ed-compact-icon">
+              <ShieldIcon />
+            </span>
+            <div>
+              <h3>{t('home.whySecurityTitle')}</h3>
+              <p>{t('home.whySecurityDesc')}</p>
+            </div>
+          </div>
+          <div className="home-ed-compact-divider"></div>
+          <div className="home-ed-compact-card">
+            <span className="home-ed-compact-icon">
+              <NailFileIcon />
+            </span>
+            <div>
+              <h3>{t('home.whyFileTitle')}</h3>
+              <p>{t('home.whyFileDesc')}</p>
+            </div>
+          </div>
+          <div className="home-ed-compact-divider"></div>
+          <div className="home-ed-compact-card">
+            <span className="home-ed-compact-icon">
+              <SparkleIcon />
+            </span>
+            <div>
+              <h3>{t('home.whyArtTitle')}</h3>
+              <p>{t('home.whyArtDesc')}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="home-steps">
         <div className="home-steps-header">
-          <p className="home-hero-eyebrow">{t('home.stepsEyebrow')}</p>
+          <p className="home-steps-eyebrow">{t('home.stepsEyebrow')}</p>
           <h2 className="home-steps-title">{t('home.stepsTitle')}</h2>
         </div>
         <div className="home-steps-row">

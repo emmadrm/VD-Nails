@@ -31,10 +31,18 @@
     "sslNote": "Secure payments via SSL encryption"
   },
   "home": {
-    "eyebrow": "",
-    "title": "Nail Care at Your Fingertips",
-    "subtitle": "Professional nail care, nail art and beauty products — book your appointment online in seconds.",
+    "eyebrow": "More than nails. An experience.",
+    "title": "Because for us, luxury is not an overstatement.",
+    "description": "It's the quality, care and safety you feel at every visit.",
     "cta": "Book Appointment",
+    "whyEyebrow": "Our experience",
+    "whyTitle": "Why trust us",
+    "whySecurityTitle": "Safety & Hygiene",
+    "whySecurityDesc": "Hygiene is a non-negotiable priority for us. Our tools are meticulously sterilized and every set is prepared and individually packaged for each client, ensuring high standards of cleanliness and safety.",
+    "whyFileTitle": "Your own personal nail file",
+    "whyFileDesc": "Every client has her own personal nail file, offered free of charge. Because proper care starts with the smallest details.",
+    "whyArtTitle": "French & Nail Art, at no extra charge",
+    "whyArtDesc": "Timeless French tips and minimal designs on short length are offered free of charge, so you can choose the style that expresses you without compromise.",
     "stepsEyebrow": "How it works",
     "stepsTitle": "Three simple steps",
     "step1Title": "Choose a Service",
@@ -43,7 +51,7 @@
     "step2Desc": "Pick the day and time that suits you, in just a few seconds.",
     "step3Title": "Enjoy the Result",
     "step3Desc": "Relax and let our experienced professionals take care of you.",
-    "statement": "“Nail care isn't a luxury — it's the everyday detail that makes the difference.”",
+    "statement": "Professional nail care, nail art and beauty products — book your appointment online in seconds.",
     "statementLink": "See our services →"
   },
   "services": {

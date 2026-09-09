@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from 'react-i18next';
-import VDLogo from '../assets/Vdnails_logo.PNG';
+import VDLogo from '../assets/VD-Logo.png';
 import CartSidebar from './CartSidebar';
 import '../index.css';
 
@@ -118,8 +118,8 @@ function Header({ cart, setCart }) {
 
         {/* --- Λογότυπο (Ακριβώς όπως το είχες αρχικά) --- */}
         <div className="text-center mb-4 header-logo-block">
-          <Link to="/" className="d-flex align-items-center justify-content-center text-decoration-none">
-           <img src={VDLogo} alt="VD Nails Logo" className="logo-image" /> 
+          <Link to="/" className="d-flex flex-column align-items-center justify-content-center text-decoration-none">
+           <img src={VDLogo} alt="VD Nails Logo" className="logo-image" />
             <h1 className="mt-3 logo-text">VD Nails</h1>
           </Link>
         </div>
