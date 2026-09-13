@@ -2,32 +2,79 @@ import Header from './components/Header.jsx';
 import Footer from './components/Footer.jsx';
 
 import './index.css';
-import React, {useState, useEffect, Suspense, lazy} from 'react';
+import React, { useState, useEffect, Suspense, lazy} from 'react';
 import {BrowserRouter , Routes , Route, useLocation} from 'react-router-dom';
 import CookieConsent, { getCookieConsentValue } from "react-cookie-consent";
 import { useTranslation } from 'react-i18next';
 import { initGA, trackPageView, disableGA } from './analytics';
 
-const Home = lazy(() => import('./pages/Home.jsx'));
-const Services = lazy(() => import('./pages/Services.jsx'));
-const Eshop = lazy(() => import('./pages/E-shop.jsx'));
-const Contact = lazy(() => import('./pages/Contact.jsx'));
-const Booking = lazy(() => import('./pages/Booking.jsx'));
-const Checkout = lazy(() => import('./pages/Checkout.jsx'));
-const Terms = lazy(() => import('./components/Terms.jsx'));
-const Privacy = lazy(() => import('./components/Privacy.jsx'));
-const Cookies = lazy(() => import('./components/Cookies.jsx'));
-const Shipping = lazy(() => import('./components/Shipping.jsx'));
-const Returns = lazy(() => import('./components/Returns.jsx'));
-const Success = lazy(() => import('./components/Success.jsx'));
-const Admin = lazy(() => import('./pages/Admin.jsx'));
-const Profile = lazy(() => import('./pages/Profile.jsx'));
-const Auth = lazy(() => import('./components/Auth.jsx'));
-const ForgotPassword = lazy(() => import('./components/ForgotPassword.jsx'));
-const ResetPassword = lazy(() => import('./components/ResetPassword.jsx'));
-const ServiceDetails = lazy(() => import('./pages/ServiceDetails.jsx'));
-const AdminLogin = lazy(() => import('./components/AdminLogin.jsx'));
-const NotFound = lazy(() => import('./components/NotFound.jsx'));
+const lazyWithReload = (importer, chunkName) =>
+  lazy(async () => {
+    const reloadKey = `vdnails_chunk_reload_${chunkName}`;
+
+    try {
+      const module = await importer();
+
+      // Chunk φορτώθηκε κανονικά, άρα καθαρίζουμε τυχόν προηγούμενο flag.
+      sessionStorage.removeItem(reloadKey);
+
+      return module;
+    } catch (error) {
+       const message = error instanceof Error ? error.message : String(error);
+
+      const isChunkError =
+        message.includes('Failed to fetch dynamically imported module') ||
+        message.includes('Importing a module script failed') ||
+        message.includes('ChunkLoadError') ||
+        message.includes('Loading chunk');
+
+      // Do not reload for unrelated application/import errors.
+      if (!isChunkError) {
+        throw error;
+      }
+      const alreadyReloaded = sessionStorage.getItem(reloadKey);
+
+      if (!alreadyReloaded) {
+        console.warn(
+          `[VD Nails] Failed to load ${chunkName} chunk. Reloading page...`,
+          error
+        );
+
+        sessionStorage.setItem(reloadKey, 'true');
+
+        window.location.reload();
+
+        // Περιμένουμε το reload.
+        return new Promise(() => {});
+      }
+
+      // Αν αποτύχει και μετά το reload, δεν κάνουμε infinite reload loop.
+      sessionStorage.removeItem(reloadKey);
+
+      throw error;
+    }
+  });
+
+const Home = lazyWithReload(() => import('./pages/Home.jsx'), 'Home');
+const Services = lazyWithReload(() => import('./pages/Services.jsx'), 'Services');
+const Eshop = lazyWithReload(() => import('./pages/E-shop.jsx'), 'Eshop');
+const Contact = lazyWithReload(() => import('./pages/Contact.jsx'), 'Contact');
+const Booking = lazyWithReload(() => import('./pages/Booking.jsx'), 'Booking');
+const Checkout = lazyWithReload(() => import('./pages/Checkout.jsx'), 'Checkout');
+const Terms = lazyWithReload(() => import('./components/Terms.jsx'), 'Terms');
+const Privacy = lazyWithReload(() => import('./components/Privacy.jsx'), 'Privacy');
+const Cookies = lazyWithReload(() => import('./components/Cookies.jsx'), 'Cookies');
+const Shipping = lazyWithReload(() => import('./components/Shipping.jsx'), 'Shipping');
+const Returns = lazyWithReload(() => import('./components/Returns.jsx'), 'Returns');
+const Success = lazyWithReload(() => import('./components/Success.jsx'), 'Success');
+const Admin = lazyWithReload(() => import('./pages/Admin.jsx'), 'Admin');
+const Profile = lazyWithReload(() => import('./pages/Profile.jsx'), 'Profile');
+const Auth = lazyWithReload(() => import('./components/Auth.jsx'), 'Auth');
+const ForgotPassword = lazyWithReload(() => import('./components/ForgotPassword.jsx'), 'ForgotPassword');
+const ResetPassword = lazyWithReload(() => import('./components/ResetPassword.jsx'), 'ResetPassword');
+const ServiceDetails = lazyWithReload(() => import('./pages/ServiceDetails.jsx'), 'ServiceDetails');
+const AdminLogin = lazyWithReload(() => import('./components/AdminLogin.jsx'), 'AdminLogin');
+const NotFound = lazyWithReload(() => import('./components/NotFound.jsx'), 'NotFound');
 
 const GDPR_COOKIE_NAME = 'vdnails_gdpr_consent';
 
