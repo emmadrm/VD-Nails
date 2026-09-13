@@ -108,7 +108,10 @@ const PaymentForm = ({
           >
             <PaymentElement
               options={{
-                layout: 'tabs',
+                layout: {
+                  type: 'accordion',
+                  defaultCollapsed: false,
+                },
                 wallets: {
                   applePay: 'auto',
                   googlePay: 'auto',
