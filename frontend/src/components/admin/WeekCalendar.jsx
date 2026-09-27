@@ -249,7 +249,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
             const dateStr = formatLocalDate(d);
             const h = effectiveHours(dateStr);
             const openMin = timeToMinutes(h.open_time), closeMin = timeToMinutes(h.close_time);
-            const dayApts = appointments.filter(a => formatLocalDate(a.appointment_date) === dateStr);
+            const dayApts = appointments.filter(a => a.status !== 'cancelled' && formatLocalDate(a.appointment_date) === dateStr);
             const layout = layoutDay(dayApts, getAptDuration);
 
             return (

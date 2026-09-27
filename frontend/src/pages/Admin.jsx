@@ -12,7 +12,7 @@ import ServicePicker from '../components/admin/ServicePicker';
 import ClientHistoryPanel from '../components/admin/ClientHistoryPanel';
 import WeekCalendar from '../components/admin/WeekCalendar';
 import {
-  IconSearch, IconEdit, IconTrash, IconCheck, IconX, IconClock, IconAlert, IconMenu
+  IconSearch, IconEdit, IconTrash, IconCheck, IconX, IconClock, IconAlert, IconMenu, IconHistory
 } from '../components/admin/icons';
 
 registerLocale('el', el);
@@ -349,13 +349,13 @@ export default function Admin() {
   };
 
   const handleDeleteAppointment = (id) => {
-    triggerConfirm("Ακύρωση Κράτησης", "Είστε σίγουροι ότι θέλετε να ακυρώσετε και να διαγράψετε αυτό το ραντεβού;", async () => {
+    triggerConfirm("Διαγραφή Κράτησης", "Το ραντεβού θα διαγραφεί οριστικά και δεν θα εμφανίζεται στο ιστορικό ή στα έσοδα. Για απλή ακύρωση χρησιμοποιήστε το κουμπί ✕.", async () => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}`, { method: 'DELETE', headers: getJsonHeaders() });
         if (!res.ok) throw new Error("Σφάλμα");
-        toast.success("Το ραντεβού ακυρώθηκε.");
+        toast.success("Το ραντεβού διαγράφηκε.");
         fetchAppointments();
-      } catch (err) { toast.error("Σφάλμα κατά την ακύρωση."); }
+      } catch (err) { toast.error("Σφάλμα κατά τη διαγραφή."); }
     });
   };
 
@@ -396,16 +396,26 @@ export default function Admin() {
     return matchesSearch;
   });
 
+  const APPOINTMENT_STATUS_ACTIONS = {
+    completed: { title: "Ολοκλήρωση Ραντεβού", message: "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", success: "Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!" },
+    cancelled: { title: "Ακύρωση Ραντεβού", message: "Το ραντεβού θα σημειωθεί ως ακυρωμένο και η ώρα θα ελευθερωθεί. Η εγγραφή παραμένει στο ιστορικό.", success: "Το ραντεβού σημειώθηκε ως ακυρωμένο." },
+    confirmed: { title: "Επαναφορά Ραντεβού", message: "Το ραντεβού θα επανέλθει ως ενεργό.", success: "Το ραντεβού επανήλθε ως ενεργό." }
+  };
+
   const updateAppointmentStatus = (id, status) => {
-    triggerConfirm("Ολοκλήρωση Ραντεβού", "Επιβεβαιώνεις ότι το ραντεβού ολοκληρώθηκε επιτυχώς; Θα προσμετρηθεί στα έσοδα.", async () => {
+    const action = APPOINTMENT_STATUS_ACTIONS[status];
+    triggerConfirm(action.title, action.message, async () => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}/status`, {
           method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status })
         });
-        if (res.ok) {
-          toast.success("Το ραντεβού καταχωρήθηκε ως ολοκληρωμένο!");
-          fetchAppointments();
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) return handleAuthError(res.status);
+          const errData = await res.json().catch(() => ({}));
+          return toast.error(errData.error || "Αποτυχία ενημέρωσης ραντεβού.");
         }
+        toast.success(action.success);
+        fetchAppointments();
       } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
     });
   };
@@ -512,7 +522,11 @@ export default function Admin() {
                               </>
                             )}
                           </td>
-                          <td data-label="Υπηρεσία"><span className="admin-badge admin-badge-brand">{apt.service_name}</span></td>
+                          <td data-label="Υπηρεσία">
+                            <span className="admin-badge admin-badge-brand">{apt.service_name}</span>
+                            {apt.status === 'cancelled' && <span className="admin-badge admin-badge-danger" style={{ marginLeft: 6 }}>Ακυρωμένο</span>}
+                            {apt.status === 'completed' && <span className="admin-badge admin-badge-success" style={{ marginLeft: 6 }}>Ολοκληρωμένο</span>}
+                          </td>
                           <td data-label="Ημερομηνία & ώρα">
                             {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')}
                             <span className="admin-cell-sub">{apt.appointment_time.slice(0, 5)}</span>
@@ -522,6 +536,11 @@ export default function Admin() {
                             <div className="admin-row-actions">
                               {apt.status !== 'completed' && apt.status !== 'cancelled' && (
                                 <button className="admin-icon-btn admin-icon-btn--success" onClick={() => updateAppointmentStatus(apt.id, 'completed')} title="Ολοκλήρωση"><IconCheck size={15} /></button>
+                              )}
+                              {apt.status === 'cancelled' ? (
+                                <button className="admin-icon-btn" onClick={() => updateAppointmentStatus(apt.id, 'confirmed')} title="Επαναφορά"><IconHistory size={15} /></button>
+                              ) : (
+                                <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => updateAppointmentStatus(apt.id, 'cancelled')} title="Ακύρωση"><IconX size={15} /></button>
                               )}
                               <button className="admin-icon-btn" onClick={() => openEditAppointment(apt)} title="Επεξεργασία"><IconEdit size={15} /></button>
                               <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteAppointment(apt.id)} title="Διαγραφή"><IconTrash size={15} /></button>

@@ -56,24 +56,21 @@ const verifyAdmin = (req, res, next) => {
   const token = authHeader.split(' ')[1];
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) return res.status(401).json({ error: 'Το πάσο έληξε ή είναι άκυρο.' });
-    next(); 
+    if (decoded.role !== 'admin') return res.status(403).json({ error: 'Δεν υπάρχει άδεια πρόσβασης.' });
+    next();
   });
 };
 
-const verifyToken = (req, res, next) => {
+// Δέχεται είτε admin είτε συνδεδεμένο πελάτη — ο έλεγχος ιδιοκτησίας γίνεται μέσα στο route
+const verifyUserOrAdmin = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "Δεν παρέχεται token πρόσβασης (Unauthorized)" });
 
-  if (!token) {
-    return res.status(401).json({ error: "Δεν παρέχεται token πρόσβασης (Unauthorized)" });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET , (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ error: "Μη έγκυρο ή ληγμένο token (Forbidden)" });
-    }
-
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ error: "Μη έγκυρο ή ληγμένο token (Forbidden)" });
     req.user = decoded;
+    req.isAdmin = decoded.role === 'admin';
     next();
   });
 };
@@ -405,10 +402,52 @@ app.post('/api/appointments/direct', async (req, res) => {
   }
 });
 
-app.put('/api/appointments/:id/status', verifyToken, async (req, res) => {
+const APPOINTMENT_STATUSES = ['confirmed', 'completed', 'cancelled'];
+const CLIENT_CHANGE_MIN_HOURS = 24;
+
+// Φέρνει το ραντεβού μαζί με τις ώρες που απομένουν μέχρι την έναρξή του (ώρα Ελλάδας)
+const getAppointmentWithTiming = async (id) => {
+  const result = await pool.query(
+    `SELECT id, user_id, service_name, duration, status, appointment_time,
+       TO_CHAR(appointment_date, 'YYYY-MM-DD') AS date_str,
+       EXTRACT(EPOCH FROM (((appointment_date + appointment_time::time) AT TIME ZONE 'Europe/Athens') - NOW())) / 3600 AS hours_until
+     FROM appointments WHERE id = $1`,
+    [id]
+  );
+  return result.rows[0];
+};
+
+const isFutureSlot = async (date, time) => {
+  const result = await pool.query(`SELECT (($1::date + $2::time) AT TIME ZONE 'Europe/Athens') > NOW() AS in_future`, [date, time]);
+  return result.rows[0].in_future;
+};
+
+app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
+  if (!APPOINTMENT_STATUSES.includes(status)) return res.status(400).json({ error: "Μη έγκυρη κατάσταση ραντεβού." });
   try {
+    const apt = await getAppointmentWithTiming(id);
+    if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
+
+    // Ο πελάτης μπορεί μόνο να ακυρώσει δικό του, μη ολοκληρωμένο ραντεβού
+    if (!req.isAdmin) {
+      if (String(apt.user_id) !== String(req.user.id)) return res.status(403).json({ error: "Δεν έχετε πρόσβαση σε αυτό το ραντεβού." });
+      if (status !== 'cancelled') return res.status(403).json({ error: "Δεν επιτρέπεται αυτή η ενέργεια." });
+      if (apt.status !== 'confirmed') return res.status(409).json({ error: "Το ραντεβού δεν μπορεί πλέον να ακυρωθεί." });
+      if (Number(apt.hours_until) < CLIENT_CHANGE_MIN_HOURS) {
+        return res.status(403).json({ error: "Η ακύρωση ραντεβού επιτρέπεται μόνο έως και 24 ώρες πριν." });
+      }
+    }
+
+    // Η επαναφορά ακυρωμένου ραντεβού απαιτεί η ώρα του να είναι ακόμα ελεύθερη
+    if (apt.status === 'cancelled' && status !== 'cancelled') {
+      const effectiveDuration = await getEffectiveDuration(apt.service_name, apt.duration);
+      if (await hasAppointmentOverlap(apt.date_str, apt.appointment_time.slice(0, 5), effectiveDuration, id)) {
+        return res.status(409).json({ error: "Η ώρα του ραντεβού έχει πλέον κλειστεί από άλλο ραντεβού." });
+      }
+    }
+
     await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -421,14 +460,26 @@ app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
-app.put('/api/appointments/:id', async (req, res) => {
+app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { appointment_date, appointment_time } = req.body;
   try {
-    const existing = await pool.query('SELECT service_name, duration FROM appointments WHERE id = $1', [id]);
-    if (existing.rows.length === 0) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
+    const apt = await getAppointmentWithTiming(id);
+    if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
 
-    const effectiveDuration = await getEffectiveDuration(existing.rows[0].service_name, existing.rows[0].duration);
+    // Ο πελάτης αλλάζει μόνο δικό του ενεργό ραντεβού, τουλάχιστον 24 ώρες πριν, και μόνο σε μελλοντική ώρα
+    if (!req.isAdmin) {
+      if (String(apt.user_id) !== String(req.user.id)) return res.status(403).json({ error: "Δεν έχετε πρόσβαση σε αυτό το ραντεβού." });
+      if (apt.status !== 'confirmed') return res.status(409).json({ error: "Το ραντεβού δεν μπορεί πλέον να αλλάξει." });
+      if (Number(apt.hours_until) < CLIENT_CHANGE_MIN_HOURS) {
+        return res.status(403).json({ error: "Η αλλαγή ραντεβού επιτρέπεται μόνο έως και 24 ώρες πριν." });
+      }
+      if (!(await isFutureSlot(appointment_date, appointment_time))) {
+        return res.status(409).json({ error: "Η επιλεγμένη ώρα έχει ήδη περάσει. Παρακαλούμε επιλέξτε άλλη ώρα." });
+      }
+    }
+
+    const effectiveDuration = await getEffectiveDuration(apt.service_name, apt.duration);
     if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
       return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
     }
@@ -476,7 +527,7 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/appointments/:id', async (req, res) => {
+app.delete('/api/appointments/:id', verifyAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     await pool.query('DELETE FROM appointments WHERE id = $1', [id]);

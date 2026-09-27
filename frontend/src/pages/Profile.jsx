@@ -52,8 +52,17 @@ export default function Profile() {
   const fetchData = async () => {
     try {
       const res = await fetch(`${API_URL}/api/user/history/${user.id}`, { headers: getAuthHeaders() });
+      // Ληγμένο/άκυρο token: αποσύνδεση και επιστροφή στο login αντί για κρασάρισμα της σελίδας
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('vd_user');
+        localStorage.removeItem('userToken');
+        window.dispatchEvent(new Event('storage')); // Ενημερώνει το Header
+        navigate('/login');
+        return;
+      }
+      if (!res.ok) throw new Error(`History request failed: ${res.status}`);
       const data = await res.json();
-      setHistory(data);
+      setHistory({ appointments: data.appointments || [], orders: data.orders || [] });
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,6 +99,10 @@ export default function Profile() {
   };
 
   const cancelAppointment = (apt) => {
+    if (getHoursDifference(apt.appointment_date, apt.appointment_time) < 24) {
+      toast.error(t('profile.toastCancelTooLate'));
+      return;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' }); // Πηγαίνει ψηλά
     setConfirmDialog({
       isOpen: true,
@@ -97,9 +110,10 @@ export default function Profile() {
       message: t('profile.cancelApptMsg'),
       onConfirm: async () => {
         try {
-          const res = await fetch(`${API_URL}/api/appointments/${apt.id}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders() // Έλειπε το Token!
+          const res = await fetch(`${API_URL}/api/appointments/${apt.id}/status`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ status: 'cancelled' })
           });
           if (res.ok) {
             toast.success(t('profile.toastApptCancelled'));
@@ -284,10 +298,16 @@ export default function Profile() {
                     <span className="pro-service-name">{apt.service_name}</span>
                     <span className="pro-date">{apt.appointment_date.slice(0,10)} | {apt.appointment_time.slice(0,5)}</span>
                   </div>
-                  <div className="pro-item-actions">
-                    <button className="pro-link-btn" onClick={() => openRescheduleModal(apt)}>{t('profile.reschedule')}</button>
-                    <button className="pro-link-btn danger" onClick={() => cancelAppointment(apt)}>{t('profile.cancelBtn')}</button>
-                  </div>
+                  {apt.status === 'cancelled' ? (
+                    <span className="pro-badge cancelled">{t('profile.apptCancelledBadge')}</span>
+                  ) : apt.status === 'completed' ? (
+                    <span className="pro-badge shipped">{t('profile.apptCompletedBadge')}</span>
+                  ) : (
+                    <div className="pro-item-actions">
+                      <button className="pro-link-btn" onClick={() => openRescheduleModal(apt)}>{t('profile.reschedule')}</button>
+                      <button className="pro-link-btn danger" onClick={() => cancelAppointment(apt)}>{t('profile.cancelBtn')}</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
