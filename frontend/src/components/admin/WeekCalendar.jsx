@@ -3,10 +3,9 @@ import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import ServicePicker from './ServicePicker';
 import { IconChevronLeft, IconChevronRight, IconCalendar, IconClock, IconX } from './icons';
+import { getDefaultHours } from '../../businessHours';
 
 const PX_PER_MIN = 1.7;
-const DEFAULT_OPEN = '10:00';
-const DEFAULT_CLOSE = '20:00';
 const BLOCKED_CLIENT_NAME = "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
 const BLOCKED_LABEL = "Κλειστό / Ρεπό";
 const WEEKDAY_LABELS = ['Δευ', 'Τρι', 'Τετ', 'Πεμ', 'Παρ', 'Σαβ', 'Κυρ'];
@@ -81,17 +80,23 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
 
   useEffect(() => { fetchWeekHours(); }, [weekStart]);
 
-  const effectiveHours = (dateStr) => hoursMap[dateStr] || { open_time: DEFAULT_OPEN, close_time: DEFAULT_CLOSE, is_override: false };
+  const effectiveHours = (dateStr) => {
+    if (hoursMap[dateStr]) return hoursMap[dateStr];
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const def = getDefaultHours(new Date(y, m - 1, d));
+    return def ? { ...def, is_override: false, is_closed: false } : { open_time: null, close_time: null, is_override: false, is_closed: true };
+  };
   const getAptDuration = (apt) => {
     if (apt.duration) return parseInt(apt.duration);
     const svc = services.find(s => s.name === apt.service_name);
     return svc ? svc.duration_minutes : 60;
   };
 
-  const allOpens = weekDates.map(d => timeToMinutes(effectiveHours(formatLocalDate(d)).open_time));
-  const allCloses = weekDates.map(d => timeToMinutes(effectiveHours(formatLocalDate(d)).close_time));
-  const rangeStartHour = Math.floor(Math.min(...allOpens) / 60);
-  const rangeEndHour = Math.ceil(Math.max(...allCloses) / 60);
+  const openDays = weekDates.map(d => effectiveHours(formatLocalDate(d))).filter(h => !h.is_closed);
+  const allOpens = openDays.map(h => timeToMinutes(h.open_time));
+  const allCloses = openDays.map(h => timeToMinutes(h.close_time));
+  const rangeStartHour = allOpens.length ? Math.floor(Math.min(...allOpens) / 60) : 9;
+  const rangeEndHour = allCloses.length ? Math.ceil(Math.max(...allCloses) / 60) : 21;
   const rangeStartMin = rangeStartHour * 60;
   const gridHeight = (rangeEndHour - rangeStartHour) * 60 * PX_PER_MIN;
   const hourMarks = [];
@@ -116,11 +121,11 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
         method: 'POST', headers: getJsonHeaders(),
         body: JSON.stringify({ date: hoursPopover.dateStr, open_time: hoursPopover.open_time, close_time: hoursPopover.close_time })
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) { const errData = await res.json().catch(() => ({})); throw new Error(errData.error); }
       toast.success("Το ωράριο ενημερώθηκε.");
       setHoursPopover(null);
       fetchWeekHours();
-    } catch { toast.error("Σφάλμα αποθήκευσης ωραρίου."); }
+    } catch (err) { toast.error(err.message || "Σφάλμα αποθήκευσης ωραρίου."); }
   };
 
   const resetDayHours = async () => {
@@ -145,6 +150,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const duration = entryEstDuration();
     if (!duration) return false;
     const hours = effectiveHours(entryPopover.dateStr);
+    if (hours.is_closed) return true;
     const startMin = timeToMinutes(entryPopover.time);
     return startMin < timeToMinutes(hours.open_time) || (startMin + duration) > timeToMinutes(hours.close_time);
   };
@@ -179,8 +185,8 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
 
     try {
       if (needsExtend) {
-        const newOpen = minutesToTime(Math.min(timeToMinutes(hours.open_time), startMin));
-        const newClose = minutesToTime(Math.max(timeToMinutes(hours.close_time), endMin));
+        const newOpen = hours.is_closed ? minutesToTime(startMin) : minutesToTime(Math.min(timeToMinutes(hours.open_time), startMin));
+        const newClose = hours.is_closed ? minutesToTime(endMin) : minutesToTime(Math.max(timeToMinutes(hours.close_time), endMin));
         const hoursRes = await fetch(`${apiUrl}/api/admin/business-hours`, {
           method: 'POST', headers: getJsonHeaders(),
           body: JSON.stringify({ date: entryPopover.dateStr, open_time: newOpen, close_time: newClose })
@@ -188,7 +194,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
         if (!hoursRes.ok) throw new Error("Δεν ήταν δυνατή η επέκταση του ωραρίου.");
       }
       const res = await fetch(`${apiUrl}/api/appointments/direct`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        method: 'POST', headers: getJsonHeaders(), body: JSON.stringify(payload)
       });
       if (!res.ok) { const errData = await res.json().catch(() => ({})); throw new Error(errData.error || "Σφάλμα."); }
       toast.success(entryPopover.mode === 'book' ? "Το ραντεβού καταχωρήθηκε!" : "Η ώρα κλειδώθηκε.");
@@ -229,9 +235,9 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                 <span className="wk-cal-daynum">{d.getDate()}</span>
                 <button
                   className={`wk-cal-hours-pill${h.is_override ? ' is-override' : ''}`}
-                  onClick={() => setHoursPopover({ dateStr, open_time: h.open_time, close_time: h.close_time, is_override: h.is_override })}
+                  onClick={() => setHoursPopover({ dateStr, open_time: h.open_time || '', close_time: h.close_time || '', is_override: h.is_override })}
                 >
-                  <IconClock size={11} /> {h.open_time}–{h.close_time}
+                  <IconClock size={11} /> {h.is_closed ? 'Κλειστά' : `${h.open_time}–${h.close_time}`}
                 </button>
               </div>
             );
@@ -248,7 +254,9 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
           {weekDates.map(d => {
             const dateStr = formatLocalDate(d);
             const h = effectiveHours(dateStr);
-            const openMin = timeToMinutes(h.open_time), closeMin = timeToMinutes(h.close_time);
+            // Κλειστή μέρα: όλη η στήλη σκιασμένη (open = close = αρχή πλέγματος)
+            const openMin = h.is_closed ? rangeStartMin : timeToMinutes(h.open_time);
+            const closeMin = h.is_closed ? rangeStartMin : timeToMinutes(h.close_time);
             const dayApts = appointments.filter(a => a.status !== 'cancelled' && formatLocalDate(a.appointment_date) === dateStr);
             const layout = layoutDay(dayApts, getAptDuration);
 
@@ -376,7 +384,9 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
 
               {entryOutsideHours() && (
                 <div style={{ background: 'var(--warning-bg)', color: 'var(--warning)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
-                  Εκτός τρέχοντος ωραρίου ({effectiveHours(entryPopover.dateStr).open_time}–{effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας θα επεκταθεί αυτόματα.
+                  {effectiveHours(entryPopover.dateStr).is_closed
+                    ? 'Η ημέρα είναι κλειστή. Θα ανοίξει αυτόματα μόνο για το διάστημα αυτής της καταχώρησης.'
+                    : `Εκτός τρέχοντος ωραρίου (${effectiveHours(entryPopover.dateStr).open_time}–${effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας θα επεκταθεί αυτόματα.`}
                 </div>
               )}
 

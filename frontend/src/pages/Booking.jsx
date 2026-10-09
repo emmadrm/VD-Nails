@@ -10,22 +10,13 @@ registerLocale('el', el);
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useTranslation } from 'react-i18next';
+import { generateFreeSlots, isOpenWeekday } from '../businessHours';
 
 const stripePublishableKey = import.meta.env.VITE_STRIPE_PUB_KEY;
 const stripePromise = loadStripe(stripePublishableKey);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
-const timeToMinutes = (timeStr) => {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return hours * 60 + minutes;
-};
-
-const minutesToTime = (totalMinutes) => {
-  const hours = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
-  const minutes = (totalMinutes % 60).toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
 
 // --- ΦΟΡΜΑ ΠΛΗΡΩΜΗΣ STRIPE ---
 const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmitting }) => {
@@ -46,7 +37,7 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
       const res = await fetch(`${API_URL}/create-payment-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Math.round(totalAmount * 100) }) 
+        body: JSON.stringify({ type: 'appointment', services: payload.services })
       });
       
       const data = await res.json();
@@ -183,48 +174,26 @@ export default function Booking() {
 
     const currentDuration = totalDuration || 60;
 
+    const fetchJson = (url) => fetch(url).then(res => { if (!res.ok) throw new Error(`${url}: ${res.status}`); return res.json(); });
+
     Promise.all([
-      fetch(`${API_URL}/api/booked-times?date=${formattedDate}`).then(res => res.json()),
-      fetch(`${API_URL}/api/business-hours/${formattedDate}`).then(res => res.json())
+      fetchJson(`${API_URL}/api/booked-times?date=${formattedDate}`),
+      fetchJson(`${API_URL}/api/business-hours/${formattedDate}`)
     ])
       .then(([bookedSlots, businessHours]) => {
-        const startDay = timeToMinutes(businessHours.open_time);
-        const endDay = timeToMinutes(businessHours.close_time);
-
         const now = new Date();
-        const isToday = formData.date.toDateString() === now.toDateString();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-        const generatedFreeSlots = [];
-
-        for (let minutes = startDay; minutes < endDay; minutes += 30) {
-          if (isToday && minutes <= currentMinutes) continue;
-
-          const proposedStart = minutes;
-          const proposedEnd = minutes + currentDuration;
-
-          if (proposedEnd > endDay) continue;
-
-          let isOverlap = false;
-          for (let booked of bookedSlots) {
-            if (!booked.time) continue;
-
-            const bookedStart = timeToMinutes(booked.time);
-            const bookedEnd = bookedStart + booked.duration;
-
-            if (proposedStart < bookedEnd && proposedEnd > bookedStart) {
-              isOverlap = true;
-              break;
-            }
-          }
-          if (!isOverlap) generatedFreeSlots.push(minutesToTime(proposedStart));
-        }
-
-        setAvailableTimes(generatedFreeSlots);
+        setAvailableTimes(generateFreeSlots({
+          businessHours,
+          bookedSlots,
+          duration: currentDuration,
+          isToday: formData.date.toDateString() === now.toDateString(),
+          currentMinutes: now.getHours() * 60 + now.getMinutes()
+        }));
         setLoadingTimes(false);
       })
       .catch(err => {
         console.error(err);
+        setAvailableTimes([]);
         setLoadingTimes(false);
       });
   }, [formData.date, selectedServiceIds, dbServices]);
@@ -374,7 +343,7 @@ export default function Booking() {
               selected={formData.date}
               disabled={showStripeForm}
               onChange={(d) => { setFormData({ ...formData, date: d, time: '' }); setErrors({}); setShowStripeForm(false); }}
-              dateFormat="dd/MM/yyyy" minDate={new Date()} className="form-control vd-input w-100" placeholderText={t('booking.selectDate')} required
+              dateFormat="dd/MM/yyyy" minDate={new Date()} filterDate={isOpenWeekday} className="form-control vd-input w-100" placeholderText={t('booking.selectDate')} required
             />
           </div>
 

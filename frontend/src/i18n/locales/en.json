@@ -15,9 +15,15 @@
   },
   "footer": {
     "hoursTitle": "Opening Hours",
-    "tuesdayFriday": "Tuesday - Friday:",
-    "saturday": "Saturday:",
-    "closedDays": "Monday & Sunday:",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
     "closed": "CLOSED",
     "policiesTitle": "Policies & Security",
     "terms": "Terms of Use",
@@ -28,7 +34,8 @@
     "contactTitle": "Contact",
     "address": "13 Pentelis Str, Agia Paraskevi 15343",
     "copyright": "VD Nails. All rights reserved.",
-    "sslNote": "Secure payments via SSL encryption"
+    "sslNote": "Secure payments via SSL encryption",
+    "madeBy": "Designed & developed by"
   },
   "home": {
     "eyebrow": "More than nails. An experience.",
@@ -216,7 +223,8 @@
     "confirmYes": "Yes, Confirm",
     "toastUserUpdated": "Your details have been updated!",
     "toastSaveError": "Error while saving.",
-    "toastConnError": "Connection error.",    "toastApptCancelled": "Appointment cancelled successfully!",
+    "toastConnError": "Connection error.",
+    "toastApptCancelled": "Appointment cancelled successfully!",
     "toastApptCancelError": "Error cancelling the appointment.",
     "toastRescheduleTooLate": "Rescheduling is only allowed up to 24 hours in advance.",
     "toastCancelTooLate": "Cancellation is only allowed up to 24 hours in advance. Please contact us for any changes.",
@@ -252,7 +260,7 @@
       "title": "Terms of Use",
       "intro": "Welcome to <strong>VD Nails</strong>. Using our online store and services requires unconditional acceptance of the following terms. Please read them carefully before proceeding with any transaction.",
       "businessTitle": "Business Information",
-      "businessBody": "This online store is owned and operated by <strong>[Full Business Name]</strong>, registered at <strong>[Registered Address]</strong>, Tax ID (ΑΦΜ): <strong>[Tax ID]</strong>, Tax Office (ΔΟΥ): <strong>[Tax Office]</strong>[, Company Registration No. (Γ.Ε.ΜΗ.): <strong>[Registration No.]</strong> — where applicable]. For any contact, see the «Contact» section below.",
+      "businessBody": "This online store is owned and operated by <strong>VD Nails AE</strong>, registered at <strong>13 Pentelis Str, Agia Paraskevi</strong>, Tax ID (ΑΦΜ): <strong>158537675</strong>, Tax Office (ΔΟΥ): <strong>[Tax Office]</strong>, Company Registration No. (Γ.Ε.ΜΗ.): <strong>19649503000</strong>. For any contact, see the «Contact» section below.",
       "s1Title": "1. General Information",
       "s1Body": "This website is the official online store of VD Nails. We reserve the right to freely modify, revise or remove these terms of use and transaction conditions whenever deemed necessary, undertaking to inform consumers of any change through the pages of this online store.",
       "s2Title": "2. Information Provided & Products",
@@ -280,7 +288,7 @@
       "title": "Privacy Policy",
       "intro": "At <strong>VD Nails</strong>, we fully respect your personal data and are committed to protecting it in accordance with the European Union's General Data Protection Regulation (GDPR). This policy explains what kind of information we collect, how we use it and how we protect it.",
       "controllerTitle": "Data Controller",
-      "controllerBody": "The data controller for your personal data is <strong>[Full Business Name]</strong>, registered at <strong>[Registered Address]</strong>, Tax ID (ΑΦΜ): <strong>[Tax ID]</strong>. For any matter relating to your personal data, contact us at <strong>info@vdnails.gr</strong>.",
+      "controllerBody": "The data controller for your personal data is <strong>VD Nails AE</strong>, registered at <strong>13 Pentelis Str</strong>, Tax ID (ΑΦΜ): <strong>158537675</strong>. For any matter relating to your personal data, contact us at <strong>info@vdnails.gr</strong>.",
       "s1Title": "1. What data do we collect?",
       "s1Body": "When you register with our store, book an appointment or complete an order, we only collect the absolutely necessary data:",
       "s1Li1": "<strong>Identification & Contact Details:</strong> Full name, email address and phone number.",

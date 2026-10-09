@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../index.css';
 import VDLogo from '../assets/VD-Logo.png';
+import { WEEKLY_HOURS, WEEKDAY_ORDER } from '../businessHours';
 
 function Footer() {
   const { t } = useTranslation();
@@ -14,18 +15,16 @@ function Footer() {
           <div className="col-lg-4 col-md-6 mb-4 mb-lg-0">
             <h5 className="text-uppercase mb-3" style={{ fontSize: '1rem', letterSpacing: '1px' }}>{t('footer.hoursTitle')}</h5>
             <div style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
-              <div className="footer-hours-row">
-                <span>{t('footer.tuesdayFriday')}</span>
-                <strong>10:00 - 20:00</strong>
-              </div>
-              <div className="footer-hours-row">
-                <span>{t('footer.saturday')}</span>
-                <strong>10:00 - 18:00</strong>
-              </div>
-              <div className="footer-hours-row" style={{ borderBottom: 'none', marginBottom: 0 }}>
-                <span>{t('footer.closedDays')}</span>
-                <strong>{t('footer.closed')}</strong>
-              </div>
+              {WEEKDAY_ORDER.map((day, i) => {
+                const hours = WEEKLY_HOURS[day];
+                const isLast = i === WEEKDAY_ORDER.length - 1;
+                return (
+                  <div key={day} className="footer-hours-row" style={isLast ? { borderBottom: 'none', marginBottom: 0 } : undefined}>
+                    <span>{t(`footer.days.${day}`)}:</span>
+                    <strong>{hours ? `${hours.open_time} - ${hours.close_time}` : t('footer.closed')}</strong>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -100,6 +99,10 @@ function Footer() {
           </p>
           <p className="mb-0" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
             {t('footer.sslNote')}
+          </p>
+          <p className="mb-0 w-100 text-center" style={{ fontSize: '0.75rem', marginTop: '8px', opacity: 0.8 }}>
+            {t('footer.madeBy')}{' '}
+            <a href="https://www.tech4u.gr" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600 }}>Tech4U Agency</a>
           </p>
         </div>
       </div>

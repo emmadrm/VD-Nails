@@ -146,6 +146,17 @@ const initDatabase = async () => {
       `);
     }
 
+    // Κάθε πληρωμή Stripe μπορεί να καταχωρηθεί μόνο μία φορά (προστασία από επανάληψη/ταυτόχρονα αιτήματα)
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255);`);
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255);`);
+    for (const table of ['orders', 'appointments']) {
+      try {
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${table}_stripe_pi_unique ON ${table} (stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL;`);
+      } catch (idxErr) {
+        console.error(`⚠️ Δεν δημιουργήθηκε μοναδικό index πληρωμών στον πίνακα ${table} (υπάρχουν διπλές εγγραφές;):`, idxErr.message);
+      }
+    }
+
     console.log("✅ Η βάση δεδομένων είναι ενημερωμένη και έτοιμη!");
   } catch (err) {
     console.error("❌ Σφάλμα αρχικοποίησης βάσης:", err);

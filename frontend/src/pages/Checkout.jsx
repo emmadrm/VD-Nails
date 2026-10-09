@@ -31,7 +31,7 @@ const PaymentForm = ({
   const userId = loggedInUser ? loggedInUser.id : null;
 
   const completeOrder = async (stripeId) => {
-    await fetch(`${API_URL}/api/orders`, {
+    const res = await fetch(`${API_URL}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -44,10 +44,15 @@ const PaymentForm = ({
         customer_notes: formData.notes || "N/A",
         products: cart,
         boxnow_locker: lockerDataRef.current || "N/A",
-        total_amount: finalTotal,
         stripe_id: stripeId,
       }),
     });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || t("checkout.errorGeneric"));
+      return;
+    }
 
     emptyCart();
     navigate("/success");
@@ -223,6 +228,7 @@ export default function Checkout({ cart, setCart }) {
   const [hasSelectedLocker, setHasSelectedLocker] = useState(false);
   const [clientSecret, setClientSecret] = useState("");
   const [loadingPayment, setLoadingPayment] = useState(false);
+  const [paymentInitError, setPaymentInitError] = useState(null);
 
   // Υπολογισμός Κόστους
   const cartSubtotal = cart ? cart.reduce((total, item) => total + (item.price * item.qty), 0) : 0;
@@ -235,6 +241,7 @@ export default function Checkout({ cart, setCart }) {
   if (step !== 3 || !hasSelectedLocker) return;
 
   setClientSecret("");
+  setPaymentInitError(null);
   const createPaymentIntent = async () => {
     try {
       setLoadingPayment(true);
@@ -245,7 +252,8 @@ export default function Checkout({ cart, setCart }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          amount: Math.round(finalTotal * 100),
+          type: "order",
+          products: cart.map(item => ({ id: item.id, name: item.name, qty: item.qty })),
         }),
       });
 
@@ -253,16 +261,19 @@ export default function Checkout({ cart, setCart }) {
 
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
+      } else {
+        setPaymentInitError(data.error || t("checkout.errorGeneric"));
       }
     } catch (err) {
       console.error(err);
+      setPaymentInitError(t("checkout.errorGeneric"));
     } finally {
       setLoadingPayment(false);
     }
   };
 
   createPaymentIntent();
-  }, [step, hasSelectedLocker, finalTotal]);
+  }, [step, hasSelectedLocker, finalTotal, cart, t]);
 
   const emptyCart = () => {
     setCart([]);
@@ -408,6 +419,8 @@ export default function Checkout({ cart, setCart }) {
 
               {loadingPayment ? (
                 <p>{t("checkout.processingPayment")}</p>
+              ) : paymentInitError ? (
+                <p style={{ color: "#ef4444", fontSize: "0.9rem" }}>{paymentInitError}</p>
               ) : (
                 clientSecret && (
                   <Elements

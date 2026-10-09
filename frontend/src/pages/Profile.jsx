@@ -4,17 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useTranslation } from 'react-i18next';
-
-const timeToMinutes = (timeStr) => {
-  const [h, m] = timeStr.split(':').map(Number);
-  return h * 60 + m;
-};
-
-const minutesToTime = (totalMinutes) => {
-  const hours = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
-  const minutes = (totalMinutes % 60).toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
+import { generateFreeSlots } from '../businessHours';
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -151,9 +141,11 @@ export default function Profile() {
     if (!rescheduleModal.isOpen || !rescheduleModal.date) return;
 
     setLoadingRescheduleTimes(true);
+    const fetchJson = (url) => fetch(url).then(res => { if (!res.ok) throw new Error(`${url}: ${res.status}`); return res.json(); });
+
     Promise.all([
-      fetch(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`).then(res => res.json()),
-      fetch(`${API_URL}/api/business-hours/${rescheduleModal.date}`).then(res => res.json())
+      fetchJson(`${API_URL}/api/booked-times?date=${rescheduleModal.date}`),
+      fetchJson(`${API_URL}/api/business-hours/${rescheduleModal.date}`)
     ])
       .then(([bookedSlots, businessHours]) => {
         // Εξαιρούμε την τρέχουσα ώρα του ίδιου του ραντεβού, ώστε να μη μπλοκάρει τον εαυτό του
@@ -161,34 +153,19 @@ export default function Profile() {
           ? bookedSlots.filter(b => b.time !== rescheduleModal.originalTime)
           : bookedSlots;
 
-        const startDay = timeToMinutes(businessHours.open_time);
-        const endDay = timeToMinutes(businessHours.close_time);
         const now = new Date();
-        const isToday = rescheduleModal.date === now.toISOString().slice(0, 10);
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-        const freeSlots = [];
-        for (let minutes = startDay; minutes < endDay; minutes += 30) {
-          if (isToday && minutes <= currentMinutes) continue;
-
-          const proposedStart = minutes;
-          const proposedEnd = minutes + rescheduleModal.duration;
-          if (proposedEnd > endDay) continue;
-
-          const overlaps = relevantSlots.some(booked => {
-            if (!booked.time) return false;
-            const bookedStart = timeToMinutes(booked.time);
-            const bookedEnd = bookedStart + booked.duration;
-            return proposedStart < bookedEnd && proposedEnd > bookedStart;
-          });
-
-          if (!overlaps) freeSlots.push(minutesToTime(proposedStart));
-        }
-
-        setRescheduleAvailableTimes(freeSlots);
+        setRescheduleAvailableTimes(generateFreeSlots({
+          businessHours,
+          bookedSlots: relevantSlots,
+          duration: rescheduleModal.duration,
+          isToday: rescheduleModal.date === todayStr,
+          currentMinutes: now.getHours() * 60 + now.getMinutes()
+        }));
         setLoadingRescheduleTimes(false);
       })
-      .catch(() => setLoadingRescheduleTimes(false));
+      .catch(() => { setRescheduleAvailableTimes([]); setLoadingRescheduleTimes(false); });
   }, [rescheduleModal.isOpen, rescheduleModal.date, rescheduleModal.duration, rescheduleModal.originalDate, rescheduleModal.originalTime]);
 
   const submitReschedule = async () => {
