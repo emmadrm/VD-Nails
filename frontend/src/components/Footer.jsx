@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../index.css';
 import VDLogo from '../assets/VD-Logo.png';
-import { WEEKLY_HOURS, WEEKDAY_ORDER } from '../businessHours';
+import { groupWeeklyHours } from '../businessHours';
+
+const hourGroups = groupWeeklyHours();
 
 function Footer() {
   const { t } = useTranslation();
@@ -15,12 +17,11 @@ function Footer() {
           <div className="col-lg-4 col-md-6 mb-4 mb-lg-0">
             <h5 className="text-uppercase mb-3" style={{ fontSize: '1rem', letterSpacing: '1px' }}>{t('footer.hoursTitle')}</h5>
             <div style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
-              {WEEKDAY_ORDER.map((day, i) => {
-                const hours = WEEKLY_HOURS[day];
-                const isLast = i === WEEKDAY_ORDER.length - 1;
+              {hourGroups.map(({ key, days, hours }, i) => {
+                const isLast = i === hourGroups.length - 1;
                 return (
-                  <div key={day} className="footer-hours-row" style={isLast ? { borderBottom: 'none', marginBottom: 0 } : undefined}>
-                    <span>{t(`footer.days.${day}`)}:</span>
+                  <div key={key} className="footer-hours-row" style={isLast ? { borderBottom: 'none', marginBottom: 0 } : undefined}>
+                    <span>{days.map(day => t(`footer.days.${day}`)).join(', ')}:</span>
                     <strong>{hours ? `${hours.open_time} - ${hours.close_time}` : t('footer.closed')}</strong>
                   </div>
                 );

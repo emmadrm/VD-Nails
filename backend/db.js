@@ -47,6 +47,21 @@ const initDatabase = async () => {
       );
     `);
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_link TEXT;`);
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_notes TEXT;`);
+
+    // Στοιχεία παραγγελίας/ραντεβού που περιμένουν online πληρωμή. Αποθηκεύονται πριν τη χρέωση,
+    // ώστε το Stripe webhook να ολοκληρώνει την καταχώρηση ακόμα κι αν ο πελάτης κλείσει τον browser.
+    // result: το τελικό αποτέλεσμα της καταχώρησης (καταγράφεται μία φορά ανά πληρωμή).
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_checkouts (
+        payment_intent_id VARCHAR(255) PRIMARY KEY,
+        type VARCHAR(20) NOT NULL,
+        payload JSONB NOT NULL,
+        result JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP
+      );
+    `);
 
     // 3. ΠΙΝΑΚΑΣ: Ραντεβού
     await pool.query(`

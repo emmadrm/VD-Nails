@@ -178,7 +178,7 @@ function App() {
             <Route path="/cookies" element={<Cookies />} />
             <Route path="/shipping" element={<Shipping />} />
             <Route path="/returns" element={<Returns />} />
-            <Route path="/success" element={<Success />} />
+            <Route path="/success" element={<Success setCart={setCart} />} />
             <Route path={`/${import.meta.env.VITE_ADMIN_URL }`} element={<AdminLogin />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/profile" element={<Profile />} />

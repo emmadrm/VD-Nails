@@ -1847,6 +1847,7 @@ textarea:focus {
 .footer-hours-row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   border-bottom: 1px solid rgba(59, 43, 31, 0.15);
   padding-bottom: 6px;
   margin-bottom: 6px;
@@ -1855,7 +1856,9 @@ textarea:focus {
 
 .footer-hours-row strong {
   color: #3b2b1f;
+  white-space: nowrap;
 }
+
 
 .footer-contact-list a {
   color: #52585c;

@@ -30,22 +30,23 @@ const PaymentForm = ({
   const loggedInUser = JSON.parse(localStorage.getItem("vd_user"));
   const userId = loggedInUser ? loggedInUser.id : null;
 
+  const orderPayload = () => ({
+    user_id: userId,
+    client_name: formData.name,
+    client_email: formData.email,
+    client_phone: formData.phone,
+    customer_notes: formData.notes || "N/A",
+    products: cart.map(item => ({ id: item.id, name: item.name, qty: item.qty })),
+    boxnow_locker: lockerDataRef.current || "N/A",
+  });
+
   const completeOrder = async (stripeId) => {
     const res = await fetch(`${API_URL}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        user_id: userId,
-        client_name: formData.name,
-        client_email: formData.email,
-        client_phone: formData.phone,
-        customer_notes: formData.notes || "N/A",
-        products: cart,
-        boxnow_locker: lockerDataRef.current || "N/A",
-        stripe_id: stripeId,
-      }),
+      body: JSON.stringify({ ...orderPayload(), stripe_id: stripeId }),
     });
 
     if (!res.ok) {
@@ -74,6 +75,21 @@ const PaymentForm = ({
         return;
       }
 
+      // Τα στοιχεία της παραγγελίας αποθηκεύονται στον server ΠΡΙΝ τη χρέωση, ώστε η παραγγελία να καταχωρηθεί
+      // ακόμα κι αν ο πελάτης κλείσει τη σελίδα ή πληρώσει με τρόπο που τον μεταφέρει σε άλλη σελίδα (τράπεζα κ.λπ.)
+      const paymentIntentId = clientSecret.split("_secret_")[0];
+      const prepareRes = await fetch(`${API_URL}/api/checkout/prepare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_intent_id: paymentIntentId, type: "order", payload: orderPayload() }),
+      });
+      if (!prepareRes.ok) {
+        const data = await prepareRes.json().catch(() => ({}));
+        setError(data.error || t("checkout.errorGeneric"));
+        setProcessing(false);
+        return;
+      }
+
       const result = await stripe.confirmPayment({
         elements,
         clientSecret,
@@ -87,6 +103,9 @@ const PaymentForm = ({
         setError(result.error.message);
       } else if (result.paymentIntent?.status === "succeeded") {
         await completeOrder(result.paymentIntent.id);
+      } else if (result.paymentIntent) {
+        // Η πληρωμή επεξεργάζεται ακόμα (π.χ. τραπεζική έγκριση) — η σελίδα επιτυχίας παρακολουθεί την κατάσταση
+        navigate(`/success?payment_intent=${result.paymentIntent.id}`);
       }
     } catch (err) {
       console.error(err);

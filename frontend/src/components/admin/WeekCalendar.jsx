@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import ServicePicker from './ServicePicker';
+import TimeInput24 from './TimeInput24';
 import { IconChevronLeft, IconChevronRight, IconCalendar, IconClock, IconX } from './icons';
 import { getDefaultHours } from '../../businessHours';
+import { findConflict, describeConflict } from './appointmentConflicts';
 
 const PX_PER_MIN = 1.7;
 const BLOCKED_CLIENT_NAME = "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
@@ -56,12 +58,14 @@ const layoutDay = (dayApts, getDuration) => {
   return result;
 };
 
-export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, appointments, services, users, formatLocalDate, onAppointmentsChanged, onViewProfile }) {
+export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, appointments, services, users, formatLocalDate, onAppointmentsChanged, onUsersChanged, onEditAppointment }) {
   const [weekStart, setWeekStart] = useState(getWeekStart(new Date()));
   const [hoursMap, setHoursMap] = useState({});
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [hoursPopover, setHoursPopover] = useState(null);
   const [entryPopover, setEntryPopover] = useState(null);
+  const [submittingEntry, setSubmittingEntry] = useState(false);
+  const submittingRef = useRef(false); // μπλοκάρει τα γρήγορα διπλά/τριπλά κλικ
 
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -94,9 +98,14 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
 
   const openDays = weekDates.map(d => effectiveHours(formatLocalDate(d))).filter(h => !h.is_closed);
   const allOpens = openDays.map(h => timeToMinutes(h.open_time));
-  const allCloses = openDays.map(h => timeToMinutes(h.close_time));
+  // Ραντεβού που τελειώνουν μετά το κλείσιμο μεγαλώνουν το πλέγμα, ώστε να φαίνονται ολόκληρα
+  const weekDateStrs = new Set(weekDates.map(d => formatLocalDate(d)));
+  const weekAptEnds = appointments
+    .filter(a => a.status !== 'cancelled' && weekDateStrs.has(formatLocalDate(a.appointment_date)))
+    .map(a => timeToMinutes(a.appointment_time) + getAptDuration(a));
+  const allCloses = [...openDays.map(h => timeToMinutes(h.close_time)), ...weekAptEnds];
   const rangeStartHour = allOpens.length ? Math.floor(Math.min(...allOpens) / 60) : 9;
-  const rangeEndHour = allCloses.length ? Math.ceil(Math.max(...allCloses) / 60) : 21;
+  const rangeEndHour = allCloses.length ? Math.min(24, Math.ceil(Math.max(...allCloses) / 60)) : 21;
   const rangeStartMin = rangeStartHour * 60;
   const gridHeight = (rangeEndHour - rangeStartHour) * 60 * PX_PER_MIN;
   const hourMarks = [];
@@ -110,7 +119,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const snapped = Math.round(rawMinutes / 15) * 15;
     setEntryPopover({
       dateStr, time: minutesToTime(snapped), mode: 'book',
-      clientSearch: '', selectedUserId: '', selectedServices: [],
+      clientSearch: '', selectedClient: null, newClient: null, creatingClient: false, selectedServices: [],
       blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60
     });
   };
@@ -145,6 +154,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       : parseInt(entryPopover.blockDuration || 0);
   };
 
+  // Η έναρξη είναι εκτός ωραρίου (ή η μέρα κλειστή) → το ωράριο της ημέρας επεκτείνεται αυτόματα
   const entryOutsideHours = () => {
     if (!entryPopover) return false;
     const duration = entryEstDuration();
@@ -152,12 +162,62 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const hours = effectiveHours(entryPopover.dateStr);
     if (hours.is_closed) return true;
     const startMin = timeToMinutes(entryPopover.time);
-    return startMin < timeToMinutes(hours.open_time) || (startMin + duration) > timeToMinutes(hours.close_time);
+    return startMin < timeToMinutes(hours.open_time) || startMin >= timeToMinutes(hours.close_time);
   };
 
-  const submitEntry = async () => {
+  // Ξεκινά μέσα στο ωράριο αλλά τελειώνει μετά το κλείσιμο → επιτρέπεται χωρίς αλλαγή ωραρίου
+  const entryEndsAfterClose = () => {
+    if (!entryPopover || entryOutsideHours()) return false;
     const duration = entryEstDuration();
-    if (entryPopover.mode === 'book' && (!entryPopover.selectedUserId || entryPopover.selectedServices.length === 0)) {
+    if (!duration) return false;
+    const hours = effectiveHours(entryPopover.dateStr);
+    return timeToMinutes(entryPopover.time) + duration > timeToMinutes(hours.close_time);
+  };
+
+  // Προσυμπλήρωση από ό,τι έχει γραφτεί στην αναζήτηση: αριθμοί → τηλέφωνο, αλλιώς → όνομα
+  const openNewClientForm = () => setEntryPopover(p => {
+    const typed = p.clientSearch.trim();
+    const isPhone = typed && /^[\d\s+-]+$/.test(typed);
+    return { ...p, selectedClient: null, newClient: { name: isPhone ? '' : typed, phone: isPhone ? typed.replace(/\D/g, '') : '' } };
+  });
+
+  const selectClient = (client) => setEntryPopover(p => ({ ...p, selectedClient: client, clientSearch: `${client.name} (${client.phone})`, newClient: null }));
+
+  // Δημιουργία νέας πελάτισσας απευθείας από τη φόρμα ραντεβού
+  const createClientFromEntry = async () => {
+    const name = entryPopover.newClient.name.trim();
+    const phone = entryPopover.newClient.phone.replace(/\D/g, '');
+    if (!name || !/^\d{10}$/.test(phone)) return toast.error("Συμπληρώστε όνομα και τηλέφωνο (10 ψηφία).");
+    setEntryPopover(p => ({ ...p, creatingClient: true }));
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/users`, {
+        method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ name, phone })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        const existing = users.find(u => (u.phone || '').replace(/\D/g, '') === phone);
+        if (existing) {
+          selectClient(existing);
+          return toast.info(`Υπάρχει ήδη πελάτισσα με αυτό το τηλέφωνο (${existing.name}) — επιλέχθηκε αυτή.`);
+        }
+      }
+      if (!res.ok) throw new Error(data.error || "Σφάλμα δημιουργίας πελάτισσας.");
+      selectClient(data.user);
+      onUsersChanged();
+      toast.success("Η πελάτισσα δημιουργήθηκε και επιλέχθηκε.");
+    } catch (err) { toast.error(err.message || "Σφάλμα δημιουργίας πελάτισσας."); }
+    finally { setEntryPopover(p => p && ({ ...p, creatingClient: false })); }
+  };
+
+  const entryConflict = () => entryPopover && findConflict({
+    appointments, services, formatLocalDate,
+    date: entryPopover.dateStr, time: entryPopover.time, duration: entryEstDuration()
+  });
+
+  const submitEntry = async () => {
+    if (submittingRef.current) return;
+    const duration = entryEstDuration();
+    if (entryPopover.mode === 'book' && (!entryPopover.selectedClient || entryPopover.selectedServices.length === 0)) {
       return toast.error("Επιλέξτε πελάτισσα και τουλάχιστον μία υπηρεσία.");
     }
     if (!duration) return toast.error("Καθορίστε διάρκεια.");
@@ -166,10 +226,12 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const endMin = startMin + duration;
     const hours = effectiveHours(entryPopover.dateStr);
     const needsExtend = entryOutsideHours();
+    const conflict = entryConflict();
+    if (conflict) return toast.error(describeConflict(conflict, services, BLOCKED_CLIENT_NAME));
 
     let payload;
     if (entryPopover.mode === 'book') {
-      const client = users.find(u => u.id === parseInt(entryPopover.selectedUserId));
+      const client = entryPopover.selectedClient;
       payload = {
         user_id: client.id, client_name: client.name, client_email: client.email, client_phone: client.phone,
         services: entryPopover.selectedServices, appointment_date: entryPopover.dateStr,
@@ -183,6 +245,10 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       };
     }
 
+    submittingRef.current = true;
+    setSubmittingEntry(true);
+    const previousOverride = hoursMap[entryPopover.dateStr];
+    let extended = false;
     try {
       if (needsExtend) {
         const newOpen = hours.is_closed ? minutesToTime(startMin) : minutesToTime(Math.min(timeToMinutes(hours.open_time), startMin));
@@ -192,6 +258,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
           body: JSON.stringify({ date: entryPopover.dateStr, open_time: newOpen, close_time: newClose })
         });
         if (!hoursRes.ok) throw new Error("Δεν ήταν δυνατή η επέκταση του ωραρίου.");
+        extended = true;
       }
       const res = await fetch(`${apiUrl}/api/appointments/direct`, {
         method: 'POST', headers: getJsonHeaders(), body: JSON.stringify(payload)
@@ -201,7 +268,20 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       setEntryPopover(null);
       onAppointmentsChanged();
       fetchWeekHours();
-    } catch (err) { toast.error(err.message || "Σφάλμα καταχώρησης."); }
+    } catch (err) {
+      // Αν το ωράριο επεκτάθηκε αλλά το ραντεβού δεν μπήκε, το ωράριο επιστρέφει όπως ήταν
+      if (extended) {
+        await (previousOverride
+          ? fetch(`${apiUrl}/api/admin/business-hours`, { method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ date: entryPopover.dateStr, ...previousOverride }) })
+          : fetch(`${apiUrl}/api/admin/business-hours/${entryPopover.dateStr}`, { method: 'DELETE', headers: getJsonHeaders() })
+        ).catch(() => {});
+        fetchWeekHours();
+      }
+      toast.error(err.message || "Σφάλμα καταχώρησης.");
+    } finally {
+      submittingRef.current = false;
+      setSubmittingEntry(false);
+    }
   };
 
   return (
@@ -279,7 +359,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                       className={`wk-cal-block${isBlocked ? ' is-blocked' : ''}`}
                       style={{ top, height, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
                       title={`${minutesToTime(start)}–${minutesToTime(end)} · ${isBlocked ? BLOCKED_LABEL : apt.client_name} · ${apt.service_name}`}
-                      onClick={(e) => { e.stopPropagation(); if (!isBlocked) onViewProfile(apt.client_name, apt.client_phone); }}
+                      onClick={(e) => { e.stopPropagation(); onEditAppointment(apt); }}
                     >
                       <strong>{isBlocked ? BLOCKED_LABEL : apt.client_name}</strong>
                       <span>{minutesToTime(start)}–{minutesToTime(end)}</span>
@@ -303,11 +383,11 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
               <div className="admin-form-row">
                 <div className="admin-field">
                   <label className="admin-label">Έναρξη</label>
-                  <input type="time" className="admin-input" value={hoursPopover.open_time} onChange={e => setHoursPopover({ ...hoursPopover, open_time: e.target.value })} />
+                  <TimeInput24 value={hoursPopover.open_time} onChange={v => setHoursPopover({ ...hoursPopover, open_time: v })} />
                 </div>
                 <div className="admin-field">
                   <label className="admin-label">Λήξη</label>
-                  <input type="time" className="admin-input" value={hoursPopover.close_time} onChange={e => setHoursPopover({ ...hoursPopover, close_time: e.target.value })} />
+                  <TimeInput24 value={hoursPopover.close_time} onChange={v => setHoursPopover({ ...hoursPopover, close_time: v })} />
                 </div>
               </div>
               <div className="admin-form-actions">
@@ -320,7 +400,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       )}
 
       {entryPopover && (
-        <div className="admin-slideover-overlay" onClick={() => setEntryPopover(null)}>
+        <div className="admin-slideover-overlay" onClick={() => !submittingEntry && setEntryPopover(null)}>
           <div className="admin-slideover" onClick={e => e.stopPropagation()}>
             <div className="admin-flex-between" style={{ marginBottom: 4 }}>
               <h4 className="admin-h">Νέα καταχώρηση</h4>
@@ -336,7 +416,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
             <div className="admin-form">
               <div className="admin-field">
                 <label className="admin-label">Ώρα</label>
-                <input type="time" className="admin-input" value={entryPopover.time} onChange={e => setEntryPopover({ ...entryPopover, time: e.target.value })} />
+                <TimeInput24 value={entryPopover.time} onChange={v => setEntryPopover({ ...entryPopover, time: v })} />
               </div>
 
               {entryPopover.mode === 'book' ? (
@@ -346,24 +426,49 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                     <input
                       type="text" className="admin-input" placeholder="Αναζήτηση με όνομα, email ή τηλέφωνο…"
                       value={entryPopover.clientSearch}
-                      onChange={e => setEntryPopover({ ...entryPopover, clientSearch: e.target.value, selectedUserId: '' })}
+                      onChange={e => setEntryPopover({ ...entryPopover, clientSearch: e.target.value, selectedClient: null })}
                     />
-                    {entryPopover.clientSearch && !entryPopover.selectedUserId && (
-                      <div style={{ position: 'absolute', zIndex: 10, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', maxHeight: 180, overflowY: 'auto', width: '100%', boxShadow: 'var(--shadow)' }}>
+                    {entryPopover.clientSearch && !entryPopover.selectedClient && !entryPopover.newClient && (
+                      <div style={{ position: 'absolute', zIndex: 10, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', maxHeight: 220, overflowY: 'auto', width: '100%', boxShadow: 'var(--shadow)' }}>
                         {users.filter(u =>
                           u.name.toLowerCase().includes(entryPopover.clientSearch.toLowerCase()) ||
                           (u.email || '').toLowerCase().includes(entryPopover.clientSearch.toLowerCase()) ||
-                          u.phone.includes(entryPopover.clientSearch)
+                          (u.phone || '').includes(entryPopover.clientSearch)
                         ).slice(0, 8).map(u => (
-                          <div key={u.id} onClick={() => setEntryPopover({ ...entryPopover, selectedUserId: u.id, clientSearch: `${u.name} (${u.phone})` })}
+                          <div key={u.id} onClick={() => selectClient(u)}
                             style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--line-soft)' }}>
                             <strong style={{ fontSize: '0.87rem' }}>{u.name}</strong>
                             <span className="admin-cell-sub">{u.email || 'Χωρίς λογαριασμό'} · {u.phone}</span>
                           </div>
                         ))}
+                        <div onClick={() => openNewClientForm()} style={{ padding: '10px 12px', cursor: 'pointer', color: 'var(--primary)', fontWeight: 600, fontSize: '0.85rem' }}>
+                          + Νέα πελάτισσα «{entryPopover.clientSearch}»
+                        </div>
                       </div>
                     )}
+                    {!entryPopover.newClient && !entryPopover.selectedClient && !entryPopover.clientSearch && (
+                      <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" style={{ marginTop: 8, alignSelf: 'flex-start' }} onClick={() => openNewClientForm()}>+ Νέα πελάτισσα</button>
+                    )}
                   </div>
+                  {entryPopover.newClient && (
+                    <div style={{ border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <strong style={{ fontSize: '0.85rem' }}>Νέα πελάτισσα</strong>
+                      <div className="admin-field">
+                        <label className="admin-label">Όνομα</label>
+                        <input type="text" className="admin-input" value={entryPopover.newClient.name} onChange={e => setEntryPopover({ ...entryPopover, newClient: { ...entryPopover.newClient, name: e.target.value } })} />
+                      </div>
+                      <div className="admin-field">
+                        <label className="admin-label">Τηλέφωνο</label>
+                        <input type="tel" className="admin-input" placeholder="10 ψηφία" value={entryPopover.newClient.phone} onChange={e => setEntryPopover({ ...entryPopover, newClient: { ...entryPopover.newClient, phone: e.target.value } })} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" className="admin-btn admin-btn-primary admin-btn-sm" disabled={entryPopover.creatingClient} onClick={createClientFromEntry}>
+                          {entryPopover.creatingClient ? 'Δημιουργία…' : 'Δημιουργία & επιλογή'}
+                        </button>
+                        <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" disabled={entryPopover.creatingClient} onClick={() => setEntryPopover({ ...entryPopover, newClient: null })}>Άκυρο</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="admin-field">
                     <label className="admin-label">Υπηρεσίες</label>
                     <ServicePicker services={services} selected={entryPopover.selectedServices} onChange={(v) => setEntryPopover({ ...entryPopover, selectedServices: v })} />
@@ -389,9 +494,20 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                     : `Εκτός τρέχοντος ωραρίου (${effectiveHours(entryPopover.dateStr).open_time}–${effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας θα επεκταθεί αυτόματα.`}
                 </div>
               )}
+              {entryEndsAfterClose() && (
+                <div style={{ background: 'var(--info-bg)', color: 'var(--info)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
+                  {`Θα τελειώσει στις ${minutesToTime(timeToMinutes(entryPopover.time) + entryEstDuration())}, μετά το κλείσιμο (${effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας δεν αλλάζει.`}
+                </div>
+              )}
 
-              <button className="admin-btn admin-btn-primary admin-btn-block" onClick={submitEntry}>
-                {entryPopover.mode === 'book' ? 'Καταχώρηση ραντεβού' : 'Κλείδωμα ώρας'}
+              {entryConflict() && (
+                <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
+                  {describeConflict(entryConflict(), services, BLOCKED_CLIENT_NAME)} Επιλέξτε άλλη ώρα.
+                </div>
+              )}
+
+              <button className="admin-btn admin-btn-primary admin-btn-block" onClick={submitEntry} disabled={submittingEntry || !!entryConflict()}>
+                {submittingEntry ? 'Καταχώρηση…' : entryPopover.mode === 'book' ? 'Καταχώρηση ραντεβού' : 'Κλείδωμα ώρας'}
               </button>
             </div>
           </div>

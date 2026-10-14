@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -8,9 +8,9 @@ import el from 'date-fns/locale/el';
 import '../index.css';
 import './admin-theme.css';
 import AdminSidebar from '../components/admin/AdminSidebar';
-import ServicePicker from '../components/admin/ServicePicker';
 import ClientHistoryPanel from '../components/admin/ClientHistoryPanel';
 import WeekCalendar from '../components/admin/WeekCalendar';
+import AppointmentEditPanel from '../components/admin/AppointmentEditPanel';
 import {
   IconSearch, IconEdit, IconTrash, IconCheck, IconX, IconClock, IconAlert, IconMenu, IconHistory
 } from '../components/admin/icons';
@@ -67,9 +67,6 @@ export default function Admin() {
   const [phoneHistory, setPhoneHistory] = useState(null);
   const [loadingPhoneHistory, setLoadingPhoneHistory] = useState(false);
 
-  // Επιλεγμένες υπηρεσίες κατά την επεξεργασία ραντεβού (πολλαπλές υπηρεσίες)
-  const [editServices, setEditServices] = useState([]);
-
   // Φίλτρα
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -111,15 +108,25 @@ export default function Admin() {
   };
 
   // --- HELPER ΓΙΑ MODAL ΕΠΙΒΕΒΑΙΩΣΗΣ ---
+  // Το modal είναι σταθερό στην οθόνη, οπότε η σελίδα μένει εκεί που ήταν (χωρίς scroll στην κορυφή).
+  // Το ref μπλοκάρει πολλαπλά γρήγορα κλικ πριν προλάβει να ξανασχεδιαστεί το κουμπί ως απενεργοποιημένο.
+  const confirmBusyRef = useRef(false);
   const triggerConfirm = (title, message, actionCallback) => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     setConfirmDialog({
       isOpen: true,
       title,
       message,
+      busy: false,
       onConfirm: async () => {
-        await actionCallback();
-        setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null });
+        if (confirmBusyRef.current) return;
+        confirmBusyRef.current = true;
+        setConfirmDialog(d => ({ ...d, busy: true }));
+        try {
+          await actionCallback();
+        } finally {
+          confirmBusyRef.current = false;
+          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null });
+        }
       }
     });
   };
@@ -310,44 +317,6 @@ export default function Admin() {
     });
   };
 
-  // --- ΕΠΕΞΕΡΓΑΣΙΑ ΡΑΝΤΕΒΟΥ ---
-  const handleUpdateAppointment = (e) => {
-    e.preventDefault();
-    if (editServices.length === 0) return toast.error("Επιλέξτε τουλάχιστον μία υπηρεσία.");
-    triggerConfirm("Ενημέρωση Κράτησης", "Είστε σίγουροι για την τροποποίηση αυτού του ραντεβού;", async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/appointments/${editingApt.id}/details`, {
-          method: 'PUT',
-          headers: getJsonHeaders(),
-          body: JSON.stringify({
-            client_name: editingApt.client_name, client_phone: editingApt.client_phone,
-            client_email: editingApt.client_email, appointment_date: formatLocalDate(editingApt.appointment_date),
-            appointment_time: editingApt.appointment_time.slice(0, 5), services: editServices
-          })
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Σφάλμα ενημέρωσης ραντεβού.");
-        }
-        toast.success("Το ραντεβού ενημερώθηκε!");
-        setEditingApt(null);
-        setEditServices([]);
-        fetchAppointments();
-      } catch (err) { toast.error(err.message || "Σφάλμα ενημέρωσης ραντεβού."); }
-    });
-  };
-
-  // Ανοίγει το panel επεξεργασίας, ανασυνθέτοντας τις επιλεγμένες υπηρεσίες από το service_name (πιθανώς ενωμένο με κόμμα)
-  const openEditAppointment = (apt) => {
-    setEditingApt(apt);
-    const names = apt.service_name.split(',').map(n => n.trim());
-    const matched = names
-      .map(name => services.find(s => s.name === name))
-      .filter(Boolean)
-      .map(s => ({ name: s.name, price: Number(s.price), duration_minutes: parseInt(s.duration_minutes) }));
-    setEditServices(matched.length > 0 ? matched : [{ name: apt.service_name, price: Number(apt.service_price), duration_minutes: parseInt(apt.duration) || 60 }]);
-  };
-
   const handleDeleteAppointment = (id) => {
     triggerConfirm("Διαγραφή Κράτησης", "Το ραντεβού θα διαγραφεί οριστικά και δεν θα εμφανίζεται στο ιστορικό ή στα έσοδα. Για απλή ακύρωση χρησιμοποιήστε το κουμπί ✕.", async () => {
       try {
@@ -477,7 +446,7 @@ export default function Admin() {
 
         {/* ================= ΡΑΝΤΕΒΟΥ ================= */}
         {activeTab === 'appointments' && (
-          <div className={`admin-grid admin-grid-2fr1fr${editingApt ? ' split' : ''}`}>
+          <div className="admin-grid admin-grid-2fr1fr">
             <div className="admin-card">
               <div className="admin-card-header">
                 <div>
@@ -542,7 +511,7 @@ export default function Admin() {
                               ) : (
                                 <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => updateAppointmentStatus(apt.id, 'cancelled')} title="Ακύρωση"><IconX size={15} /></button>
                               )}
-                              <button className="admin-icon-btn" onClick={() => openEditAppointment(apt)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                              <button className="admin-icon-btn" onClick={() => setEditingApt(apt)} title="Επεξεργασία"><IconEdit size={15} /></button>
                               <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteAppointment(apt.id)} title="Διαγραφή"><IconTrash size={15} /></button>
                             </div>
                           </td>
@@ -554,39 +523,6 @@ export default function Admin() {
               </div>
             </div>
 
-            {editingApt && (
-              <div className="admin-card" style={{ height: 'fit-content' }}>
-                <h4 className="admin-h" style={{ marginBottom: 18 }}>Επεξεργασία κράτησης</h4>
-                <form onSubmit={handleUpdateAppointment} className="admin-form">
-                  <div className="admin-field">
-                    <label className="admin-label">Όνομα πελάτη</label>
-                    <input type="text" className="admin-input" value={editingApt.client_name} onChange={e => setEditingApt({ ...editingApt, client_name: e.target.value })} required />
-                  </div>
-                  <div className="admin-field">
-                    <label className="admin-label">Τηλέφωνο</label>
-                    <input type="tel" className="admin-input" value={editingApt.client_phone} onChange={e => setEditingApt({ ...editingApt, client_phone: e.target.value })} />
-                  </div>
-                  <div className="admin-form-row">
-                    <div className="admin-field">
-                      <label className="admin-label">Ημερομηνία</label>
-                      <input type="date" className="admin-input" value={formatLocalDate(editingApt.appointment_date)} onChange={e => setEditingApt({ ...editingApt, appointment_date: e.target.value })} required />
-                    </div>
-                    <div className="admin-field">
-                      <label className="admin-label">Ώρα</label>
-                      <input type="time" className="admin-input" value={editingApt.appointment_time.slice(0, 5)} onChange={e => setEditingApt({ ...editingApt, appointment_time: e.target.value })} required />
-                    </div>
-                  </div>
-                  <div className="admin-field">
-                    <label className="admin-label">Υπηρεσίες</label>
-                    <ServicePicker services={services} selected={editServices} onChange={setEditServices} />
-                  </div>
-                  <div className="admin-form-actions">
-                    <button type="submit" className="admin-btn admin-btn-primary admin-btn-block">Αποθήκευση</button>
-                    <button type="button" className="admin-btn admin-btn-secondary admin-btn-block" onClick={() => { setEditingApt(null); setEditServices([]); }}>Ακύρωση</button>
-                  </div>
-                </form>
-              </div>
-            )}
           </div>
         )}
 
@@ -601,7 +537,8 @@ export default function Admin() {
             users={users}
             formatLocalDate={formatLocalDate}
             onAppointmentsChanged={fetchAppointments}
-            onViewProfile={fetchHistoryByPhone}
+            onUsersChanged={fetchUsers}
+            onEditAppointment={setEditingApt}
           />
         )}
 
@@ -1053,14 +990,30 @@ export default function Admin() {
 
         <ToastContainer position="top-right" autoClose={3000} style={{ zIndex: 999999 }} />
 
+        {editingApt && (
+          <AppointmentEditPanel
+            key={editingApt.id}
+            apt={editingApt}
+            services={services}
+            appointments={appointments}
+            apiUrl={API_URL}
+            getJsonHeaders={getJsonHeaders}
+            formatLocalDate={formatLocalDate}
+            triggerConfirm={triggerConfirm}
+            onClose={() => setEditingApt(null)}
+            onSaved={fetchAppointments}
+            onViewHistory={fetchHistoryByPhone}
+          />
+        )}
+
         {confirmDialog.isOpen && (
           <div className="pro-modal-overlay">
             <div className="pro-modal" style={{ textAlign: 'center' }}>
               <h3>{confirmDialog.title}</h3>
               <p style={{ color: 'var(--ink-soft)', marginBottom: 25, lineHeight: 1.5 }}>{confirmDialog.message}</p>
               <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
-                <button className="pro-btn primary" onClick={confirmDialog.onConfirm}>Ναι, επιβεβαίωση</button>
-                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })}>Άκυρο</button>
+                <button className="pro-btn primary" onClick={confirmDialog.onConfirm} disabled={confirmDialog.busy}>{confirmDialog.busy ? 'Παρακαλώ περιμένετε…' : 'Ναι, επιβεβαίωση'}</button>
+                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })} disabled={confirmDialog.busy}>Άκυρο</button>
               </div>
             </div>
           </div>

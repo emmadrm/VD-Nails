@@ -4,6 +4,11 @@
    the public site's styling.
    ============================================================ */
 
+/* Το body του site έχει backdrop-filter, που κάνει τα position:fixed παράθυρα (επιβεβαίωση, πάνελ επεξεργασίας,
+   μηνύματα) να τοποθετούνται σε σχέση με όλη τη σελίδα αντί για την οθόνη. Στο admin το απενεργοποιούμε,
+   ώστε τα παράθυρα να ανοίγουν εκεί που βρίσκεσαι, χωρίς scroll στην κορυφή. */
+body:has(.admin-shell) { backdrop-filter: none; }
+
 .admin-shell {
   --ink: #14181f;
   --ink-soft: #4b5563;
@@ -646,7 +651,6 @@
 .wk-cal-block.is-blocked {
   background: repeating-linear-gradient(45deg, var(--warning-bg), var(--warning-bg) 6px, #fbe3b8 6px, #fbe3b8 12px);
   border-left-color: var(--warning);
-  cursor: default;
 }
 
 /* ---------- Slide-over panel (new-entry form) ---------- */

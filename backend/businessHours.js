@@ -50,4 +50,13 @@ const fitsInHours = (hours, time, durationMinutes) => {
   return start >= toMinutes(hours.open_time) && start + duration <= toMinutes(hours.close_time);
 };
 
-module.exports = { WEEKLY_HOURS, isValidDate, isValidTime, resolveHours, fitsInHours };
+// Για τον admin: αρκεί η έναρξη να είναι μέσα στο ωράριο — το ραντεβού μπορεί να τελειώνει μετά το κλείσιμο
+const startsWithinHours = (hours, time, durationMinutes) => {
+  if (!hours || hours.is_closed || !isValidTime(time)) return false;
+  const duration = Number(durationMinutes);
+  if (!Number.isInteger(duration) || duration <= 0) return false;
+  const start = toMinutes(time);
+  return start >= toMinutes(hours.open_time) && start < toMinutes(hours.close_time) && start + duration <= 24 * 60;
+};
+
+module.exports = { WEEKLY_HOURS, isValidDate, isValidTime, resolveHours, fitsInHours, startsWithinHours };

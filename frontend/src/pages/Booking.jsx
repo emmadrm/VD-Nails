@@ -45,6 +45,18 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
       
       const clientSecret = data.clientSecret;
 
+      // Τα στοιχεία του ραντεβού αποθηκεύονται στον server ΠΡΙΝ τη χρέωση, ώστε το ραντεβού να καταχωρηθεί
+      // ακόμα κι αν ο πελάτης κλείσει τη σελίδα ή χαθεί η σύνδεση αμέσως μετά την πληρωμή
+      const prepareRes = await fetch(`${API_URL}/api/checkout/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_intent_id: clientSecret.split('_secret_')[0], type: 'appointment', payload })
+      });
+      if (!prepareRes.ok) {
+        const errData = await prepareRes.json().catch(() => ({}));
+        throw new Error(errData.error || t('booking.errorBank'));
+      }
+
       const result = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
           card: elements.getElement(CardElement),

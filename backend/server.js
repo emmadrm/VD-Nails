@@ -5,7 +5,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 const pool = require('./db');
-const { isValidDate, isValidTime, resolveHours, fitsInHours } = require('./businessHours');
+const { isValidDate, isValidTime, resolveHours, fitsInHours, startsWithinHours } = require('./businessHours');
 const stripe = require('stripe')(process.env.STRIPE_SEC_KEY);
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -44,6 +44,36 @@ app.use(cors({
   credentials: true
 }));
 app.use(helmet({ crossOriginResourcePolicy: false }));
+// Stripe webhook: χρειάζεται το ακατέργαστο σώμα του αιτήματος για τον έλεγχο υπογραφής, γι' αυτό δηλώνεται πριν το express.json()
+app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('STRIPE_WEBHOOK_SECRET is not set');
+    return res.status(500).send('Webhook not configured');
+  }
+  let event;
+  try { event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], secret); }
+  catch (err) { return res.status(400).send(`Webhook signature error: ${err.message}`); }
+
+  if (event.type === 'payment_intent.succeeded') {
+    const pi = event.data.object;
+    const type = pi.metadata && pi.metadata.type;
+    if (type === 'order' || type === 'appointment') {
+      try {
+        const result = await processPaidIntent(pi.id, type);
+        // 5xx → το Stripe θα ξαναστείλει την ειδοποίηση αργότερα
+        if (result.status >= 500) return res.status(500).send('Temporary error');
+        if (result.status !== 200) console.warn(`Stripe webhook ${pi.id}: ${result.status} ${result.body.error}`);
+      } catch (err) {
+        console.error('Stripe webhook error:', err);
+        Sentry.captureException(err);
+        return res.status(500).send('Temporary error');
+      }
+    }
+  }
+  res.json({ received: true });
+});
+
 app.use(express.json());
 app.use('/api/', apiLimiter);
 app.use('/api/login', loginLimiter);
@@ -131,7 +161,10 @@ const sendBrevoSms = async (phone, content) => {
         sender: process.env.BREVO_SMS_SENDER || 'VDNails',
         recipient,
         content,
-        type: 'transactional'
+        type: 'transactional',
+        // Χωρίς αυτό το Brevo στέλνει σε GSM-7 και τα περισσότερα ελληνικά γράμματα χάνονται.
+        // Με Unicode ένα SMS χωράει 70 χαρακτήρες (αλλιώς χρεώνεται ως πολλαπλό).
+        unicodeEnabled: true
       })
     });
     if (!response.ok) {
@@ -234,6 +267,117 @@ const refundIntent = async (pi) => {
   catch (err) { console.error('Refund failed:', err); Sentry.captureException(err); return false; }
 };
 
+// Κρατάμε μόνο τα πεδία που χρειάζεται η καταχώρηση (τίποτα άλλο από το σώμα του αιτήματος)
+const pickOrderPayload = (b = {}) => ({
+  user_id: b.user_id || null,
+  client_name: b.client_name, client_email: b.client_email, client_phone: b.client_phone,
+  customer_notes: b.customer_notes || 'N/A',
+  products: Array.isArray(b.products) ? b.products.map(p => ({ id: p && p.id, name: p && p.name, qty: p && p.qty })) : [],
+  boxnow_locker: b.boxnow_locker || 'N/A',
+});
+const pickAppointmentPayload = (b = {}) => ({
+  user_id: b.user_id || null,
+  client_name: b.client_name, client_email: b.client_email, client_phone: b.client_phone,
+  services: Array.isArray(b.services) ? b.services.map(s => ({ name: s && s.name })) : [],
+  appointment_date: b.appointment_date, appointment_time: b.appointment_time,
+});
+const pickPayload = (type, body) => (type === 'order' ? pickOrderPayload(body) : pickAppointmentPayload(body));
+
+const isValidIntentId = (id) => typeof id === 'string' && /^pi_[A-Za-z0-9]+$/.test(id);
+
+// Ολοκληρώνει μία πληρωμένη παραγγελία/ραντεβού ΜΙΑ φορά, όποιος κι αν φτάσει πρώτος: ο browser του πελάτη
+// ή το Stripe webhook (π.χ. αν ο πελάτης έκλεισε τη σελίδα ή πλήρωσε με τρόπο που κάνει ανακατεύθυνση).
+// Το αποτέλεσμα αποθηκεύεται, ώστε κάθε επόμενη κλήση για την ίδια πληρωμή να παίρνει την ίδια απάντηση.
+const processPaidIntent = async (paymentIntentId, type, fallbackPayload = null) => {
+  if (!isValidIntentId(paymentIntentId)) return { status: 400, body: { error: "Δεν βρέθηκε έγκυρη πληρωμή." } };
+  const lock = await acquireLocks([`payment:${paymentIntentId}`]);
+  try {
+    const row = (await lock.client.query('SELECT type, payload, result FROM pending_checkouts WHERE payment_intent_id = $1', [paymentIntentId])).rows[0];
+    if (row && row.result) return row.result;
+    if (row && row.type !== type) return { status: 400, body: { error: "Η πληρωμή δεν αντιστοιχεί σε αυτή την ενέργεια." } };
+    const payload = row ? row.payload : fallbackPayload;
+    if (!payload) return { status: 404, body: { error: "Δεν βρέθηκαν τα στοιχεία της παραγγελίας." } };
+
+    const paid = await loadPaidIntent(paymentIntentId, type);
+    // 409 = υπάρχει ήδη παραγγελία/ραντεβού με αυτή την πληρωμή (π.χ. προηγούμενη προσπάθεια που κόπηκε μετά την καταχώρηση)
+    const alreadyRegistered = paid.status === 409;
+    if (paid.error && !alreadyRegistered) return { status: paid.status, body: { error: paid.error } };
+
+    const result = alreadyRegistered
+      ? { status: 200, body: { success: true } }
+      : type === 'order'
+        ? await createOrder(payload, paid.pi)
+        : await createAppointment(payload, { paidIntent: paid.pi });
+
+    // Τα σφάλματα 5xx (π.χ. προσωρινό πρόβλημα βάσης) δεν «κλειδώνονται», ώστε να ξαναδοκιμαστούν
+    if (result.status < 500) {
+      await lock.client.query(
+        `INSERT INTO pending_checkouts (payment_intent_id, type, payload, result, completed_at) VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (payment_intent_id) DO UPDATE SET result = $4, completed_at = NOW()`,
+        [paymentIntentId, type, JSON.stringify(payload), JSON.stringify(result)]
+      );
+    }
+    return result;
+  } finally {
+    await lock.release();
+  }
+};
+
+// Ο browser αποθηκεύει τα στοιχεία λίγο πριν τη χρέωση της κάρτας
+app.post('/api/checkout/prepare', async (req, res) => {
+  const { payment_intent_id, type } = req.body;
+  if (!isValidIntentId(payment_intent_id) || !['order', 'appointment'].includes(type)) {
+    return res.status(400).json({ error: "Μη έγκυρο αίτημα πληρωμής." });
+  }
+  try {
+    let pi;
+    try { pi = await stripe.paymentIntents.retrieve(payment_intent_id); }
+    catch { return res.status(400).json({ error: "Δεν βρέθηκε έγκυρη πληρωμή." }); }
+    if (!pi.metadata || pi.metadata.type !== type) return res.status(400).json({ error: "Η πληρωμή δεν αντιστοιχεί σε αυτή την ενέργεια." });
+
+    const result = await pool.query(
+      `INSERT INTO pending_checkouts (payment_intent_id, type, payload) VALUES ($1, $2, $3)
+       ON CONFLICT (payment_intent_id) DO UPDATE SET payload = $3 WHERE pending_checkouts.result IS NULL
+       RETURNING payment_intent_id`,
+      [payment_intent_id, type, JSON.stringify(pickPayload(type, req.body.payload))]
+    );
+    if (result.rows.length === 0) return res.status(409).json({ error: "Η πληρωμή αυτή έχει ήδη ολοκληρωθεί." });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Σφάλμα προετοιμασίας πληρωμής." });
+  }
+});
+
+// Κατάσταση πληρωμής για τη σελίδα /success (π.χ. όταν ο πελάτης επιστρέφει από την τράπεζα)
+app.get('/api/checkout/status/:paymentIntentId', async (req, res) => {
+  const { paymentIntentId } = req.params;
+  if (!isValidIntentId(paymentIntentId)) return res.status(400).json({ error: "Μη έγκυρη πληρωμή." });
+  const describe = (type, result) => (result.status === 200
+    ? { state: 'completed', type }
+    : { state: 'failed', type, error: result.body.error });
+  try {
+    const row = (await pool.query('SELECT type, result FROM pending_checkouts WHERE payment_intent_id = $1', [paymentIntentId])).rows[0];
+    if (row && row.result) return res.json(describe(row.type, row.result));
+
+    let pi;
+    try { pi = await stripe.paymentIntents.retrieve(paymentIntentId); }
+    catch { return res.status(404).json({ error: "Η πληρωμή δεν βρέθηκε." }); }
+    const type = pi.metadata && pi.metadata.type;
+    if (pi.status === 'processing') return res.json({ state: 'processing', type });
+    if (pi.status !== 'succeeded') return res.json({ state: 'failed', type, error: "Η πληρωμή δεν ολοκληρώθηκε. Δεν έγινε καμία χρέωση." });
+    if (!row) return res.json({ state: 'processing', type });
+
+    // Πληρώθηκε αλλά δεν έχει καταχωρηθεί ακόμα (το webhook δεν έχει φτάσει) → καταχώρηση τώρα
+    const result = await processPaidIntent(paymentIntentId, row.type);
+    if (result.status >= 500) return res.json({ state: 'processing', type });
+    res.json(describe(row.type, result));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Σφάλμα ελέγχου πληρωμής." });
+  }
+});
+
 app.post('/create-payment-intent', async (req, res) => {
   const { type, products, services } = req.body;
   try {
@@ -260,28 +404,26 @@ app.post('/create-payment-intent', async (req, res) => {
   }
 });
 
-app.post('/api/orders', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, customer_notes, products, boxnow_locker, stripe_id } = req.body;
+// Καταχωρεί πληρωμένη παραγγελία e-shop. paidIntent: η επαληθευμένη πληρωμή Stripe. Επιστρέφει { status, body }.
+const createOrder = async (data, paidIntent) => {
+  const { user_id, client_name, client_email, client_phone, customer_notes, products, boxnow_locker } = data;
   try {
-    const paid = await loadPaidIntent(stripe_id, 'order');
-    if (paid.error) return res.status(paid.status).json({ error: paid.error });
-
     let priced;
     try { priced = await priceOrder(products); }
     catch (err) {
       if (!(err instanceof PricingError)) throw err;
-      const refunded = await refundIntent(paid.pi);
-      return res.status(409).json({ error: `${err.message} ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` });
+      const refunded = await refundIntent(paidIntent);
+      return { status: 409, body: { error: `${err.message} ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` } };
     }
-    if (priced.totalCents !== paid.pi.amount_received) {
-      const refunded = await refundIntent(paid.pi);
-      return res.status(409).json({ error: `Το ποσό της πληρωμής δεν αντιστοιχεί στο καλάθι. ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` });
+    if (priced.totalCents !== paidIntent.amount_received) {
+      const refunded = await refundIntent(paidIntent);
+      return { status: 409, body: { error: `Το ποσό της πληρωμής δεν αντιστοιχεί στο καλάθι. ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` } };
     }
 
     const total_amount = priced.totalCents / 100;
     const result = await pool.query(
       `INSERT INTO orders (user_id, client_name, client_email, client_phone, customer_notes, products, boxnow_locker, total_amount, payment_status, status, stripe_payment_intent_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'completed', 'pending', $9) RETURNING id`,
-      [user_id || null, client_name, client_email, client_phone, customer_notes || 'N/A', JSON.stringify(priced.items), boxnow_locker || 'N/A', total_amount, stripe_id]
+      [user_id || null, client_name, client_email, client_phone, customer_notes || 'N/A', JSON.stringify(priced.items), boxnow_locker || 'N/A', total_amount, paidIntent.id]
     );
     const orderId = result.rows[0].id;
     for (const item of priced.items) {
@@ -290,12 +432,17 @@ app.post('/api/orders', async (req, res) => {
     const formattedProducts = priced.items.map(item => ({ ...item, price: Number(item.price).toFixed(2).replace('.', ',') }));
     const vatAmount = total_amount - (total_amount / 1.24);
     sendBrevoTemplateEmail(client_email, client_name, 1, { client_name, order_id: orderId, order_date: new Date().toLocaleDateString('el-GR'), customer_address: boxnow_locker || 'Δεν δηλώθηκε διεύθυνση', total_amount: total_amount.toFixed(2).replace('.', ','), vat_amount: vatAmount.toFixed(2).replace('.', ','), products: formattedProducts });
-    res.json({ success: true, orderId: orderId });
+    return { status: 200, body: { success: true, orderId } };
   } catch (err) {
-    if (err.code === '23505') return res.status(409).json({ error: "Η πληρωμή αυτή έχει ήδη καταχωρηθεί." });
+    if (err.code === '23505') return { status: 409, body: { error: "Η πληρωμή αυτή έχει ήδη καταχωρηθεί." } };
     console.error(err);
-    res.status(500).json({ error: "Αποτυχία καταχώρησης παραγγελίας" });
+    return { status: 500, body: { error: "Αποτυχία καταχώρησης παραγγελίας" } };
   }
+};
+
+app.post('/api/orders', async (req, res) => {
+  const result = await processPaidIntent(req.body.stripe_id, 'order', pickOrderPayload(req.body));
+  res.status(result.status).json(result.body);
 });
 
 // Ο πελάτης μπορεί μόνο να ακυρώσει δική του παραγγελία που δεν έχει ακόμα σταλεί
@@ -360,7 +507,7 @@ const getEffectiveDuration = async (serviceName, ownDuration) => {
   return svc.rows[0] ? parseInt(svc.rows[0].duration_minutes) : 60;
 };
 
-const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = null) => {
+const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = null, db = pool) => {
   const startMinutes = timeToMinutes(time);
   const endMinutes = startMinutes + durationMinutes;
 
@@ -370,7 +517,7 @@ const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = nu
     LEFT JOIN services s ON a.service_name = s.name
     WHERE a.appointment_date = $1 AND a.status != 'cancelled'${excludeId ? ' AND a.id != $2' : ''}`;
   const params = excludeId ? [date, excludeId] : [date];
-  const result = await pool.query(query, params);
+  const result = await db.query(query, params);
 
   return result.rows.some(row => {
     const existingStart = timeToMinutes(row.appointment_time.slice(0, 5));
@@ -379,6 +526,31 @@ const hasAppointmentOverlap = async (date, time, durationMinutes, excludeId = nu
   });
 };
 
+// Κλείδωμα (advisory lock) σε μια συναλλαγή: όσο κρατιέται, κανένα άλλο αίτημα με το ίδιο κλειδί δεν προχωρά.
+const acquireLocks = async (keys) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const key of [...new Set(keys)].sort()) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [key]);
+    }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+    throw err;
+  }
+  return {
+    client,
+    release: async () => {
+      try { await client.query('COMMIT'); } finally { client.release(); }
+    }
+  };
+};
+
+// Σειριοποιεί τις εγγραφές ραντεβού ανά ημερομηνία: όσο κρατιέται το lock, κανένα άλλο αίτημα για την ίδια μέρα
+// δεν μπορεί να περάσει τον έλεγχο επικάλυψης. Έτσι ένα διπλό/τριπλό κλικ (ταυτόχρονα αιτήματα) δεν δημιουργεί διπλά ραντεβού.
+const acquireDateLock = (...dates) => acquireLocks(dates.filter(Boolean).map(date => `appointments:${date}`));
+
 const computeServiceTotals = (services) => {
   const name = services.map(s => s.name).join(', ');
   const price = services.reduce((sum, s) => sum + Number(s.price || 0), 0);
@@ -386,15 +558,16 @@ const computeServiceTotals = (services) => {
   return { name, price, duration };
 };
 
-const getEffectiveHours = async (date) => {
-  const override = await pool.query('SELECT open_time, close_time FROM business_hours WHERE date = $1', [date]);
+const getEffectiveHours = async (date, db = pool) => {
+  const override = await db.query('SELECT open_time, close_time FROM business_hours WHERE date = $1', [date]);
   return resolveHours(date, override.rows[0]);
 };
 
-const isWithinBusinessHours = async (date, time, durationMinutes) => {
+// allowOvertime: ο admin μπορεί να κλείσει ραντεβού που ξεκινά μέσα στο ωράριο αλλά τελειώνει μετά το κλείσιμο
+const isWithinBusinessHours = async (date, time, durationMinutes, allowOvertime = false, db = pool) => {
   if (!isValidDate(date) || !isValidTime(time)) return false;
-  const hours = await getEffectiveHours(date);
-  return fitsInHours(hours, time, durationMinutes);
+  const hours = await getEffectiveHours(date, db);
+  return allowOvertime ? startsWithinHours(hours, time, durationMinutes) : fitsInHours(hours, time, durationMinutes);
 };
 
 app.get('/api/business-hours/:date', async (req, res) => {
@@ -445,56 +618,62 @@ app.get('/api/appointments/check-availability', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
 
-app.post('/api/appointments/direct', async (req, res) => {
-  const { user_id, client_name, client_email, client_phone, services, appointment_date, appointment_time, payment_method, duration, stripe_payment_intent_id } = req.body;
-  let { service_name, service_price } = req.body;
-  const isAdmin = isAdminRequest(req);
-  const isPrepay = payment_method === 'prepay_success';
+// Καταχωρεί ραντεβού. paidIntent: η (ήδη επαληθευμένη) online πληρωμή, αλλιώς null για πληρωμή στο κατάστημα.
+// Επιστρέφει { status, body } ώστε να καλείται τόσο από τον browser όσο και από το Stripe webhook.
+const createAppointment = async (data, { isAdmin = false, paidIntent = null } = {}) => {
+  const { user_id, client_name, client_email, client_phone, services, appointment_date, appointment_time, duration } = data;
+  let { service_name, service_price } = data;
+  let lock = null;
   try {
     // Κλείδωμα ώρας και ραντεβού χωρίς υπηρεσίες από τον κατάλογο επιτρέπονται μόνο στον admin
-    if (client_name === BLOCKED_CLIENT_NAME && !isAdmin) return res.status(403).json({ error: "Δεν επιτρέπεται αυτή η ενέργεια." });
+    if (client_name === BLOCKED_CLIENT_NAME && !isAdmin) return { status: 403, body: { error: "Δεν επιτρέπεται αυτή η ενέργεια." } };
 
     let effectiveDuration, priceCents = null;
     if (services && services.length) {
-      const totals = await priceServices(services);
+      let totals;
+      try { totals = await priceServices(services); }
+      catch (err) {
+        if (!(err instanceof PricingError) || !paidIntent) throw err;
+        const refunded = await refundIntent(paidIntent);
+        return { status: 409, body: { error: `${err.message} ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` } };
+      }
       service_name = totals.name;
       priceCents = totals.priceCents;
       service_price = priceCents / 100;
       effectiveDuration = totals.duration;
-    } else if (isAdmin && !isPrepay) {
+    } else if (isAdmin && !paidIntent) {
       effectiveDuration = await getEffectiveDuration(service_name, duration);
     } else {
-      return res.status(400).json({ error: "Επιλέξτε τουλάχιστον μία υπηρεσία." });
-    }
-
-    // Online πληρωμή: επαληθεύουμε στο Stripe ότι πληρώθηκε ακριβώς το σωστό ποσό
-    let paidIntent = null;
-    if (isPrepay) {
-      const paid = await loadPaidIntent(stripe_payment_intent_id, 'appointment');
-      if (paid.error) return res.status(paid.status).json({ error: paid.error });
-      paidIntent = paid.pi;
-      if (paidIntent.amount_received !== priceCents) {
+      if (paidIntent) {
         const refunded = await refundIntent(paidIntent);
-        return res.status(409).json({ error: `Το ποσό της πληρωμής δεν αντιστοιχεί στις υπηρεσίες. ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` });
+        return { status: 400, body: { error: `Δεν επιλέχθηκε υπηρεσία. ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` } };
       }
+      return { status: 400, body: { error: "Επιλέξτε τουλάχιστον μία υπηρεσία." } };
     }
 
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+    // Online πληρωμή: πρέπει να έχει πληρωθεί ακριβώς το σωστό ποσό
+    if (paidIntent && paidIntent.amount_received !== priceCents) {
+      const refunded = await refundIntent(paidIntent);
+      return { status: 409, body: { error: `Το ποσό της πληρωμής δεν αντιστοιχεί στις υπηρεσίες. ${refunded ? 'Η χρέωση επιστράφηκε αυτόματα.' : 'Επικοινωνήστε μαζί μας για επιστροφή της χρέωσης.'}` } };
+    }
+
+    lock = await acquireDateLock(appointment_date);
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, isAdmin, lock.client))) {
       if (paidIntent) {
         await refundIntent(paidIntent);
-        return res.status(409).json({ error: "Η ώρα αυτή είναι εκτός ωραρίου λειτουργίας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." });
+        return { status: 409, body: { error: "Η ώρα αυτή είναι εκτός ωραρίου λειτουργίας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." } };
       }
-      return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
+      return { status: 409, body: { error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." } };
     }
 
-    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, null, lock.client);
 
     if (overlap) {
       if (paidIntent) {
         await refundIntent(paidIntent);
-        return res.status(409).json({ error: "Η ώρα καταλήφθηκε λίγο πριν ολοκληρωθεί η πληρωμή σας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." });
+        return { status: 409, body: { error: "Η ώρα καταλήφθηκε λίγο πριν ολοκληρωθεί η πληρωμή σας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." } };
       }
-      return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι πλέον διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
+      return { status: 409, body: { error: "Η επιλεγμένη ώρα δεν είναι πλέον διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." } };
     }
 
     let paymentTypeStr = paidIntent ? 'Online Πληρωμή (Κάρτα)' : 'Πληρωμή στο Κατάστημα';
@@ -521,20 +700,34 @@ app.post('/api/appointments/direct', async (req, res) => {
       paidIntent ? paidIntent.id : null
     ];
 
-    const result = await pool.query(query, values);
+    const result = await lock.client.query(query, values);
+    await lock.release();
+    lock = null;
 
     if(client_name !== BLOCKED_CLIENT_NAME) {
       const formattedDateForSms = appointment_date.split('-').reverse().join('/');
-      const smsContent = `VD Nails: Το ραντεβού σας VD-${result.rows[0].id} (${service_name}) επιβεβαιώθηκε για ${formattedDateForSms} στις ${appointment_time}. Σας περιμένουμε!`;
+      const smsContent = `Το ραντεβού σας για τις ${formattedDateForSms} στις ${String(appointment_time).slice(0, 5)} έχει επιβεβαιωθεί. Σε περιμένω!`;
       sendBrevoSms(client_phone, smsContent);
     }
-    return res.json({ success: true });
+    return { status: 200, body: { success: true, appointmentId: result.rows[0].id } };
   } catch (err) {
-    if (err instanceof PricingError) return res.status(400).json({ error: err.message });
-    if (err.code === '23505') return res.status(409).json({ error: "Η πληρωμή αυτή έχει ήδη καταχωρηθεί." });
+    if (err instanceof PricingError) return { status: 400, body: { error: err.message } };
+    if (err.code === '23505') return { status: 409, body: { error: "Η πληρωμή αυτή έχει ήδη καταχωρηθεί." } };
     console.error("SQL Error:", err);
-    return res.status(500).json({ error: "Σφάλμα στη βάση δεδομένων" });
+    return { status: 500, body: { error: "Σφάλμα στη βάση δεδομένων" } };
+  } finally {
+    if (lock) await lock.release().catch(() => {});
   }
+};
+
+app.post('/api/appointments/direct', async (req, res) => {
+  // Online πληρωμή: η καταχώρηση γίνεται μία φορά ανά πληρωμή (από εδώ ή από το Stripe webhook, όποιο φτάσει πρώτο)
+  if (req.body.payment_method === 'prepay_success') {
+    const result = await processPaidIntent(req.body.stripe_payment_intent_id, 'appointment', pickAppointmentPayload(req.body));
+    return res.status(result.status).json(result.body);
+  }
+  const result = await createAppointment(req.body, { isAdmin: isAdminRequest(req) });
+  res.status(result.status).json(result.body);
 });
 
 const APPOINTMENT_STATUSES = ['confirmed', 'completed', 'cancelled'];
@@ -561,6 +754,7 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
   if (!APPOINTMENT_STATUSES.includes(status)) return res.status(400).json({ error: "Μη έγκυρη κατάσταση ραντεβού." });
+  let lock = null;
   try {
     const apt = await getAppointmentWithTiming(id);
     if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
@@ -576,16 +770,18 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
     }
 
     // Η επαναφορά ακυρωμένου ραντεβού απαιτεί η ώρα του να είναι ακόμα ελεύθερη
+    lock = await acquireDateLock(apt.date_str);
     if (apt.status === 'cancelled' && status !== 'cancelled') {
       const effectiveDuration = await getEffectiveDuration(apt.service_name, apt.duration);
-      if (await hasAppointmentOverlap(apt.date_str, apt.appointment_time.slice(0, 5), effectiveDuration, id)) {
+      if (await hasAppointmentOverlap(apt.date_str, apt.appointment_time.slice(0, 5), effectiveDuration, id, lock.client)) {
         return res.status(409).json({ error: "Η ώρα του ραντεβού έχει πλέον κλειστεί από άλλο ραντεβού." });
       }
     }
 
-    await pool.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    await lock.client.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+  finally { if (lock) await lock.release().catch(() => {}); }
 });
 
 app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
@@ -598,6 +794,7 @@ app.get('/api/admin/appointments', verifyAdmin, async (req, res) => {
 app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { appointment_date, appointment_time } = req.body;
+  let lock = null;
   try {
     const apt = await getAppointmentWithTiming(id);
     if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
@@ -615,21 +812,24 @@ app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
     }
 
     const effectiveDuration = await getEffectiveDuration(apt.service_name, apt.duration);
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+    lock = await acquireDateLock(appointment_date);
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, req.isAdmin, lock.client))) {
       return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
     }
-    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id, lock.client);
     if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
 
-    await pool.query('UPDATE appointments SET appointment_date=$1, appointment_time=$2 WHERE id=$3', [appointment_date, appointment_time, id]);
+    await lock.client.query('UPDATE appointments SET appointment_date=$1, appointment_time=$2 WHERE id=$3', [appointment_date, appointment_time, id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+  finally { if (lock) await lock.release().catch(() => {}); }
 });
 
 app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
   const { id } = req.params;
   const { client_name, client_phone, client_email, services, appointment_date, appointment_time } = req.body;
   let { service_name, service_price } = req.body;
+  let lock = null;
   try {
     let effectiveDuration;
     if (services && services.length) {
@@ -641,25 +841,27 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
       effectiveDuration = await getEffectiveDuration(service_name, null);
     }
 
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration))) {
+    lock = await acquireDateLock(appointment_date);
+    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, true, lock.client))) {
       return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
     }
-    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id);
+    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id, lock.client);
     if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
 
     if (services && services.length) {
-      await pool.query(
+      await lock.client.query(
         'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5, appointment_date=$6, appointment_time=$7, duration=$8 WHERE id=$9',
         [client_name, client_phone, client_email, service_name, service_price, appointment_date, appointment_time, effectiveDuration, id]
       );
     } else {
-      await pool.query(
+      await lock.client.query(
         'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7 WHERE id=$8',
         [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, id]
       );
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
+  finally { if (lock) await lock.release().catch(() => {}); }
 });
 
 app.delete('/api/appointments/:id', verifyAdmin, async (req, res) => {

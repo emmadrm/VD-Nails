@@ -13,6 +13,19 @@ export const WEEKLY_HOURS = {
 // Σειρά εμφάνισης στο footer: Δευτέρα → Κυριακή
 export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+// Μέρες με ίδιο ωράριο σε μία ομάδα (με τη σειρά της πρώτης τους μέρας), π.χ. [{ days: [2, 5], hours: {...} }, ...]
+export const groupWeeklyHours = () => {
+  const groups = [];
+  WEEKDAY_ORDER.forEach(day => {
+    const hours = WEEKLY_HOURS[day];
+    const key = hours ? `${hours.open_time}-${hours.close_time}` : 'closed';
+    const group = groups.find(g => g.key === key);
+    if (group) group.days.push(day);
+    else groups.push({ key, days: [day], hours });
+  });
+  return groups;
+};
+
 export const getDefaultHours = (date) => WEEKLY_HOURS[date.getDay()] || null;
 
 export const isOpenWeekday = (date) => !!getDefaultHours(date);

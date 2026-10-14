@@ -241,7 +241,14 @@
     "orderDetails": "You will soon receive a confirmation email with your shipping details via BoxNow.",
     "backHome": "Back to Home",
     "backShop": "Back to the Store",
-    "viewProfile": "View my profile →"
+    "viewProfile": "View my profile →",
+    "checkingTitle": "Confirming payment…",
+    "checkingMsg": "Please wait a few seconds while we confirm your payment.",
+    "failedTitle": "Payment not completed",
+    "failedMsg": "The payment was not completed. You have not been charged.",
+    "processingTitle": "Your payment is processing",
+    "processingMsg": "Your bank is still processing the payment. Once it completes, you will receive a confirmation by email or SMS.",
+    "tryAgain": "Try again"
   },
   "notFound": {
     "message": "Oops! The page you're looking for doesn't exist.",
