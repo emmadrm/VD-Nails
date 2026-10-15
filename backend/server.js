@@ -889,8 +889,8 @@ app.get('/api/products/categories', async (req, res) => {
 
 app.post('/api/products', verifyAdmin, upload.single('image'), async (req, res) => {
   const { name, description, price, stock, category } = req.body;
-  // Το req.file.path είναι πλέον το μόνιμο URL από το Cloudinary!
-  const image_url = req.file ? req.file.path : null;
+  // Το req.file.secure_url είναι το μόνιμο (https) URL από το Cloudinary
+  const image_url = req.file ? req.file.secure_url : null;
   try {
     const result = await pool.query(
       'INSERT INTO products (name, description, price, image_url, stock, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
@@ -905,7 +905,7 @@ app.put('/api/products/:id', verifyAdmin, upload.single('image'), async (req, re
   const { name, description, price, stock, category } = req.body;
   try {
     if (req.file) {
-      const image_url = req.file.path; // URL από Cloudinary
+      const image_url = req.file.secure_url; // URL από Cloudinary
       await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, image_url=$5, category=$6 WHERE id=$7', [name, description, price, stock, image_url, category || 'Γενικά', id]);
     } else {
       await pool.query('UPDATE products SET name=$1, description=$2, price=$3, stock=$4, category=$5 WHERE id=$6', [name, description, price, stock, category || 'Γενικά', id]);
