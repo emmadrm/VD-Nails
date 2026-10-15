@@ -28,8 +28,9 @@ cloudinary.config({
   api_secret: process.env.API_SECRET
 });
 
+// Η multer-storage-cloudinary καλεί εσωτερικά το cloudinary.v2, οπότε θέλει ολόκληρο το πακέτο και όχι το .v2
 const storage = cloudinaryStorage({
-  cloudinary,
+  cloudinary: require('cloudinary'),
   params: {
     folder: 'vd-nails-products',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
