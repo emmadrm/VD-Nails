@@ -1,6 +1,6 @@
 import React from 'react';
 import '../index.css';
-import store from '../assets/store.JPG';
+import store from '../assets/store.png';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 

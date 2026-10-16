@@ -46,7 +46,7 @@ export default function Admin() {
   };
 
   // State για το Καθολικό Modal Επιβεβαίωσης
-  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Tabs
@@ -111,21 +111,23 @@ export default function Admin() {
   // Το modal είναι σταθερό στην οθόνη, οπότε η σελίδα μένει εκεί που ήταν (χωρίς scroll στην κορυφή).
   // Το ref μπλοκάρει πολλαπλά γρήγορα κλικ πριν προλάβει να ξανασχεδιαστεί το κουμπί ως απενεργοποιημένο.
   const confirmBusyRef = useRef(false);
-  const triggerConfirm = (title, message, actionCallback) => {
+  const triggerConfirm = (title, message, actionCallback, options = {}) => {
     setConfirmDialog({
       isOpen: true,
       title,
       message,
       busy: false,
-      onConfirm: async () => {
+      inputLabel: options.inputLabel || '',
+      inputValue: options.inputValue ?? '',
+      onConfirm: async (inputValue) => {
         if (confirmBusyRef.current) return;
         confirmBusyRef.current = true;
         setConfirmDialog(d => ({ ...d, busy: true }));
         try {
-          await actionCallback();
+          await actionCallback(inputValue);
         } finally {
           confirmBusyRef.current = false;
-          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null });
+          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' });
         }
       }
     });
@@ -373,10 +375,13 @@ export default function Admin() {
 
   const updateAppointmentStatus = (id, status) => {
     const action = APPOINTMENT_STATUS_ACTIONS[status];
-    triggerConfirm(action.title, action.message, async () => {
+    const appointment = appointments.find(apt => apt.id === id);
+    const needsPaidAmount = status === 'completed' && appointment && appointment.client_name !== BLOCKED_CLIENT_NAME;
+    triggerConfirm(action.title, action.message, async (paidAmount) => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}/status`, {
-          method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify({ status })
+          method: 'PUT', headers: getJsonHeaders(),
+          body: JSON.stringify({ status, ...(needsPaidAmount ? { paid_amount: paidAmount } : {}) })
         });
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) return handleAuthError(res.status);
@@ -386,7 +391,10 @@ export default function Admin() {
         toast.success(action.success);
         fetchAppointments();
       } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
-    });
+    }, needsPaidAmount ? {
+      inputLabel: 'Ποσό που πληρώθηκε (€)',
+      inputValue: Number(appointment.service_price || 0).toFixed(2)
+    } : {});
   };
 
   const handleOrderStatusChange = (id, status) => {
@@ -1011,9 +1019,30 @@ export default function Admin() {
             <div className="pro-modal" style={{ textAlign: 'center' }}>
               <h3>{confirmDialog.title}</h3>
               <p style={{ color: 'var(--ink-soft)', marginBottom: 25, lineHeight: 1.5 }}>{confirmDialog.message}</p>
+              {confirmDialog.inputLabel && (
+                <div className="admin-field" style={{ textAlign: 'left', marginBottom: 20 }}>
+                  <label className="admin-label">{confirmDialog.inputLabel}</label>
+                  <input
+                    type="number"
+                    className="admin-input"
+                    min="0"
+                    max="99999999.99"
+                    step="0.01"
+                    required
+                    value={confirmDialog.inputValue}
+                    onChange={e => setConfirmDialog(d => ({ ...d, inputValue: e.target.value }))}
+                  />
+                </div>
+              )}
               <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
-                <button className="pro-btn primary" onClick={confirmDialog.onConfirm} disabled={confirmDialog.busy}>{confirmDialog.busy ? 'Παρακαλώ περιμένετε…' : 'Ναι, επιβεβαίωση'}</button>
-                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })} disabled={confirmDialog.busy}>Άκυρο</button>
+                <button
+                  className="pro-btn primary"
+                  onClick={() => confirmDialog.onConfirm(confirmDialog.inputValue)}
+                  disabled={confirmDialog.busy || (confirmDialog.inputLabel && (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(confirmDialog.inputValue)))}
+                >
+                  {confirmDialog.busy ? 'Παρακαλώ περιμένετε…' : 'Ναι, επιβεβαίωση'}
+                </button>
+                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' })} disabled={confirmDialog.busy}>Άκυρο</button>
               </div>
             </div>
           </div>

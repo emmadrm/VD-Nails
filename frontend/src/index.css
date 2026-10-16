@@ -7,7 +7,7 @@ html {
 
 body {
     backdrop-filter: blur(0px);
-    background-image: url('./assets/back-6.jpeg');
+    background-image: linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)), url('./assets/back-6.jpeg');
     background-repeat: no-repeat;
     background-position: center center;
     background-size: cover;
@@ -120,6 +120,26 @@ body {
 .Header {
   background-color: transparent; 
 }
+.Header .header-logo-block {
+    position: relative;
+    isolation: isolate;
+}
+.Header .header-logo-block::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: 50%;
+    width: min(76vw, 500px);
+    height: 300px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(ellipse, rgba(70, 111, 139, 0.34) 0%, rgba(70, 111, 139, 0.16) 42%, rgba(70, 111, 139, 0) 72%);
+    pointer-events: none;
+}
+.Header .header-logo-block a {
+    position: relative;
+    z-index: 1;
+}
 .Header .logo-text {
     font-family: "Quicksand", sans-serif;
     font-optical-sizing: auto;
@@ -129,10 +149,12 @@ body {
     color: #5b5454;
 }
 .Header .logo-image {
-    width: 120px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 50%;
+    display: block;
+    width: 360px;
+    height: 360px;
+    object-fit: contain;
+    margin-bottom: -90px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 4px rgba(255, 255, 255, 0.18));
 }
 
 /* Home Page */
@@ -2134,10 +2156,13 @@ textarea:focus {
     right: -10px; /* Κεντράρει λίγο καλύτερα το μενού κάτω από το κουμπί */
   }
   .Header .logo-image {
-    width: 70px;
-    height: 70px;
-    object-fit: cover;
-    border-radius: 50%;
+    width: 220px;
+    height: 220px;
+    margin-bottom: -55px;
+  }
+  .Header .header-logo-block::before {
+    width: min(90vw, 340px);
+    height: 190px;
   }
   .Header .logo-text {
     font-size: 1.7rem;
@@ -2331,4 +2356,3 @@ textarea:focus {
   gap: 10px;
   margin-top: 20px;
 }
-

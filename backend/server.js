@@ -765,12 +765,24 @@ const isFutureSlot = async (date, time) => {
 
 app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, paid_amount } = req.body;
   if (!APPOINTMENT_STATUSES.includes(status)) return res.status(400).json({ error: "Μη έγκυρη κατάσταση ραντεβού." });
+  if (paid_amount !== undefined && (!req.isAdmin || status !== 'completed')) {
+    return res.status(400).json({ error: "Το ποσό πληρωμής μπορεί να οριστεί μόνο από τον admin κατά την ολοκλήρωση." });
+  }
   let lock = null;
   try {
     const apt = await getAppointmentWithTiming(id);
     if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
+
+    let completedAmount = null;
+    if (req.isAdmin && status === 'completed') {
+      const amountText = String(paid_amount ?? apt.service_price);
+      if (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(amountText)) {
+        return res.status(400).json({ error: "Συμπληρώστε έγκυρο ποσό με έως δύο δεκαδικά ψηφία." });
+      }
+      completedAmount = Number(amountText.replace(',', '.')).toFixed(2);
+    }
 
     // Ο πελάτης μπορεί μόνο να ακυρώσει δικό του, μη ολοκληρωμένο ραντεβού
     if (!req.isAdmin) {
@@ -791,7 +803,10 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
       }
     }
 
-    await lock.client.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    await lock.client.query(
+      'UPDATE appointments SET status = $1, paid_amount = $2 WHERE id = $3',
+      [status, completedAmount, id]
+    );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
   finally { if (lock) await lock.release().catch(() => {}); }
@@ -1174,7 +1189,7 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
     const realizedStats = await pool.query(
       `SELECT 
         COUNT(id) as total_appointments, 
-        COALESCE(SUM(CAST(service_price AS NUMERIC)), 0) as realized_revenue 
+        COALESCE(SUM(COALESCE(paid_amount, service_price)), 0) as realized_revenue
        FROM appointments 
        WHERE status = 'completed' 
          AND appointment_date BETWEEN $1 AND $2 
@@ -1192,7 +1207,7 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
     );
 
     const topServices = await pool.query(
-      `SELECT service_name, COUNT(id) as times_booked, SUM(CAST(service_price AS NUMERIC)) as total_generated_revenue 
+      `SELECT service_name, COUNT(id) as times_booked, SUM(COALESCE(paid_amount, service_price)) as total_generated_revenue
        FROM appointments 
        WHERE status = 'completed' AND appointment_date BETWEEN $1 AND $2 AND client_name != '🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ' 
        GROUP BY service_name ORDER BY times_booked DESC LIMIT 5`, 
@@ -1200,7 +1215,7 @@ app.get('/api/admin/stats/appointments', verifyAdmin, async (req, res) => {
     );
 
     const frequentClients = await pool.query(
-      `SELECT client_name, client_phone, client_email, COUNT(id) as visit_count, SUM(CAST(service_price AS NUMERIC)) as total_value 
+      `SELECT client_name, client_phone, client_email, COUNT(id) as visit_count, SUM(COALESCE(paid_amount, service_price)) as total_value
        FROM appointments 
        WHERE status = 'completed' AND appointment_date BETWEEN $1 AND $2 AND client_name != '🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ' 
        GROUP BY client_name, client_phone, client_email ORDER BY visit_count DESC LIMIT 5`, 

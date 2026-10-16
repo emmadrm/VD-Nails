@@ -118,7 +118,7 @@ function Header({ cart, setCart }) {
         <div className="text-center mb-4 header-logo-block">
           <Link to="/" className="d-flex flex-column align-items-center justify-content-center text-decoration-none">
            <img src={VDLogo} alt="VD Nails Logo" className="logo-image" />
-            <h1 className="mt-3 logo-text">VD Nails</h1>
+          {/*  <h1 className="mt-3 logo-text">VD Nails</h1> */}
           </Link>
         </div>
 

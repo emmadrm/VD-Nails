@@ -86,6 +86,7 @@ const initDatabase = async () => {
     // Δεν στέλνουμε πλέον email επιβεβαίωσης για ραντεβού (μόνο SMS) — επιτρέπουμε το email
     // να λείπει, ώστε ο admin να μπορεί να κλείνει ραντεβού για πελάτες χωρίς λογαριασμό/email ακόμα.
     await pool.query(`ALTER TABLE appointments ALTER COLUMN client_email DROP NOT NULL;`);
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(10,2);`);
 
     // 4. ΠΙΝΑΚΑΣ: Υπηρεσίες (Περιλαμβάνει πλέον description)
     await pool.query(`
