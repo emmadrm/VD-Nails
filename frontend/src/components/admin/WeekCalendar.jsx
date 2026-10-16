@@ -103,8 +103,12 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
   const weekAptEnds = appointments
     .filter(a => a.status !== 'cancelled' && weekDateStrs.has(formatLocalDate(a.appointment_date)))
     .map(a => timeToMinutes(a.appointment_time) + getAptDuration(a));
+  const weekAptStarts = appointments
+    .filter(a => a.status !== 'cancelled' && weekDateStrs.has(formatLocalDate(a.appointment_date)))
+    .map(a => timeToMinutes(a.appointment_time));
   const allCloses = [...openDays.map(h => timeToMinutes(h.close_time)), ...weekAptEnds];
-  const rangeStartHour = allOpens.length ? Math.floor(Math.min(...allOpens) / 60) : 9;
+  const allStarts = [...allOpens, ...weekAptStarts];
+  const rangeStartHour = allStarts.length ? Math.floor(Math.min(...allStarts) / 60) : 9;
   const rangeEndHour = allCloses.length ? Math.min(24, Math.ceil(Math.max(...allCloses) / 60)) : 21;
   const rangeStartMin = rangeStartHour * 60;
   const gridHeight = (rangeEndHour - rangeStartHour) * 60 * PX_PER_MIN;
@@ -120,7 +124,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     setEntryPopover({
       dateStr, time: minutesToTime(snapped), mode: 'book',
       clientSearch: '', selectedClient: null, newClient: null, creatingClient: false, selectedServices: [],
-      blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60
+      blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60, allDay: false, extendHours: false
     });
   };
 
@@ -154,7 +158,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       : parseInt(entryPopover.blockDuration || 0);
   };
 
-  // Η έναρξη είναι εκτός ωραρίου (ή η μέρα κλειστή) → το ωράριο της ημέρας επεκτείνεται αυτόματα
+  // Η καταχώρηση είναι εκτός ωραρίου (ή η μέρα κλειστή) και χρειάζεται ρητή επιλογή επέκτασης.
   const entryOutsideHours = () => {
     if (!entryPopover) return false;
     const duration = entryEstDuration();
@@ -162,16 +166,21 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const hours = effectiveHours(entryPopover.dateStr);
     if (hours.is_closed) return true;
     const startMin = timeToMinutes(entryPopover.time);
-    return startMin < timeToMinutes(hours.open_time) || startMin >= timeToMinutes(hours.close_time);
+    return startMin < timeToMinutes(hours.open_time) ||
+      startMin >= timeToMinutes(hours.close_time) ||
+      startMin + duration > timeToMinutes(hours.close_time);
   };
 
   // Ξεκινά μέσα στο ωράριο αλλά τελειώνει μετά το κλείσιμο → επιτρέπεται χωρίς αλλαγή ωραρίου
   const entryEndsAfterClose = () => {
-    if (!entryPopover || entryOutsideHours()) return false;
+    if (!entryPopover) return false;
     const duration = entryEstDuration();
     if (!duration) return false;
     const hours = effectiveHours(entryPopover.dateStr);
-    return timeToMinutes(entryPopover.time) + duration > timeToMinutes(hours.close_time);
+    if (hours.is_closed) return false;
+    const startMin = timeToMinutes(entryPopover.time);
+    if (startMin < timeToMinutes(hours.open_time) || startMin >= timeToMinutes(hours.close_time)) return false;
+    return startMin + duration > timeToMinutes(hours.close_time);
   };
 
   // Προσυμπλήρωση από ό,τι έχει γραφτεί στην αναζήτηση: αριθμοί → τηλέφωνο, αλλιώς → όνομα
@@ -226,8 +235,10 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const endMin = startMin + duration;
     const hours = effectiveHours(entryPopover.dateStr);
     const needsExtend = entryOutsideHours();
+    const extendHours = needsExtend && entryPopover.extendHours && !entryPopover.allDay;
     const conflict = entryConflict();
     if (conflict) return toast.error(describeConflict(conflict, services, BLOCKED_CLIENT_NAME));
+    if (endMin > 24 * 60) return toast.error("Το ραντεβού πρέπει να ολοκληρώνεται μέσα στην ίδια ημέρα.");
 
     let payload;
     if (entryPopover.mode === 'book') {
@@ -250,9 +261,11 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const previousOverride = hoursMap[entryPopover.dateStr];
     let extended = false;
     try {
-      if (needsExtend) {
+      if (extendHours) {
         const newOpen = hours.is_closed ? minutesToTime(startMin) : minutesToTime(Math.min(timeToMinutes(hours.open_time), startMin));
-        const newClose = hours.is_closed ? minutesToTime(endMin) : minutesToTime(Math.max(timeToMinutes(hours.close_time), endMin));
+        const newClose = hours.is_closed
+          ? minutesToTime(endMin)
+          : minutesToTime(Math.max(timeToMinutes(hours.close_time), endMin));
         const hoursRes = await fetch(`${apiUrl}/api/admin/business-hours`, {
           method: 'POST', headers: getJsonHeaders(),
           body: JSON.stringify({ date: entryPopover.dateStr, open_time: newOpen, close_time: newClose })
@@ -269,13 +282,17 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       onAppointmentsChanged();
       fetchWeekHours();
     } catch (err) {
-      // Αν το ωράριο επεκτάθηκε αλλά το ραντεβού δεν μπήκε, το ωράριο επιστρέφει όπως ήταν
       if (extended) {
-        await (previousOverride
-          ? fetch(`${apiUrl}/api/admin/business-hours`, { method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ date: entryPopover.dateStr, ...previousOverride }) })
-          : fetch(`${apiUrl}/api/admin/business-hours/${entryPopover.dateStr}`, { method: 'DELETE', headers: getJsonHeaders() })
-        ).catch(() => {});
-        fetchWeekHours();
+        try {
+          const restoreRes = await (previousOverride
+            ? fetch(`${apiUrl}/api/admin/business-hours`, { method: 'POST', headers: getJsonHeaders(), body: JSON.stringify({ date: entryPopover.dateStr, ...previousOverride }) })
+            : fetch(`${apiUrl}/api/admin/business-hours/${entryPopover.dateStr}`, { method: 'DELETE', headers: getJsonHeaders() })
+          );
+          if (!restoreRes.ok) throw new Error("Δεν ήταν δυνατή η επαναφορά του προηγούμενου ωραρίου.");
+          fetchWeekHours();
+        } catch (restoreErr) {
+          toast.error(restoreErr.message || "Δεν ήταν δυνατή η επαναφορά του προηγούμενου ωραρίου.");
+        }
       }
       toast.error(err.message || "Σφάλμα καταχώρησης.");
     } finally {
@@ -387,7 +404,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                 </div>
                 <div className="admin-field">
                   <label className="admin-label">Λήξη</label>
-                  <TimeInput24 value={hoursPopover.close_time} onChange={v => setHoursPopover({ ...hoursPopover, close_time: v })} />
+                  <TimeInput24 value={hoursPopover.close_time} onChange={v => setHoursPopover({ ...hoursPopover, close_time: v })} allowMidnightEnd />
                 </div>
               </div>
               <div className="admin-form-actions">
@@ -409,14 +426,18 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
             <p className="admin-subtle" style={{ marginBottom: 16 }}>{entryPopover.dateStr.split('-').reverse().join('/')}</p>
 
             <div className="admin-pill-group" style={{ marginBottom: 18 }}>
-              <button className={`admin-pill${entryPopover.mode === 'book' ? ' active' : ''}`} onClick={() => setEntryPopover({ ...entryPopover, mode: 'book' })}>Ραντεβού</button>
-              <button className={`admin-pill${entryPopover.mode === 'block' ? ' active' : ''}`} onClick={() => setEntryPopover({ ...entryPopover, mode: 'block' })}>Κλείδωμα / Ρεπό</button>
+              <button className={`admin-pill${entryPopover.mode === 'book' ? ' active' : ''}`} onClick={() => setEntryPopover({ ...entryPopover, mode: 'book', allDay: false, extendHours: false })}>Ραντεβού</button>
+              <button className={`admin-pill${entryPopover.mode === 'block' ? ' active' : ''}`} onClick={() => setEntryPopover({ ...entryPopover, mode: 'block', allDay: false, extendHours: false })}>Κλείδωμα / Ρεπό</button>
             </div>
 
             <div className="admin-form">
               <div className="admin-field">
                 <label className="admin-label">Ώρα</label>
-                <TimeInput24 value={entryPopover.time} onChange={v => setEntryPopover({ ...entryPopover, time: v })} />
+                <TimeInput24
+                  value={entryPopover.time}
+                  onChange={v => setEntryPopover({ ...entryPopover, time: v })}
+                  disabled={entryPopover.mode === 'block' && entryPopover.allDay}
+                />
               </div>
 
               {entryPopover.mode === 'book' ? (
@@ -478,8 +499,22 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                 <>
                   <div className="admin-field">
                     <label className="admin-label">Διάρκεια (λεπτά)</label>
-                    <input type="number" min="15" className="admin-input" value={entryPopover.blockDuration} onChange={e => setEntryPopover({ ...entryPopover, blockDuration: e.target.value })} />
+                    <input type="number" min="15" className="admin-input" value={entryPopover.allDay ? 1440 : entryPopover.blockDuration} disabled={entryPopover.allDay} onChange={e => setEntryPopover({ ...entryPopover, blockDuration: e.target.value })} />
                   </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!entryPopover.allDay}
+                      onChange={e => setEntryPopover({
+                        ...entryPopover,
+                        allDay: e.target.checked,
+                        time: e.target.checked ? '00:00' : entryPopover.time,
+                        blockDuration: e.target.checked ? 1440 : 60,
+                        extendHours: false
+                      })}
+                    />
+                    Κλείσιμο όλης της ημέρας
+                  </label>
                   <div className="admin-field">
                     <label className="admin-label">Αιτιολογία</label>
                     <input type="text" className="admin-input" value={entryPopover.blockReason} onChange={e => setEntryPopover({ ...entryPopover, blockReason: e.target.value })} />
@@ -487,16 +522,26 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                 </>
               )}
 
-              {entryOutsideHours() && (
+              {entryOutsideHours() && !entryPopover.allDay && (
                 <div style={{ background: 'var(--warning-bg)', color: 'var(--warning)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
                   {effectiveHours(entryPopover.dateStr).is_closed
-                    ? 'Η ημέρα είναι κλειστή. Θα ανοίξει αυτόματα μόνο για το διάστημα αυτής της καταχώρησης.'
-                    : `Εκτός τρέχοντος ωραρίου (${effectiveHours(entryPopover.dateStr).open_time}–${effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας θα επεκταθεί αυτόματα.`}
+                    ? 'Η ημέρα είναι κλειστή. Η καταχώρηση θα ισχύει μόνο για τον admin.'
+                    : `Η καταχώρηση είναι εκτός τρέχοντος ωραρίου (${effectiveHours(entryPopover.dateStr).open_time}–${effectiveHours(entryPopover.dateStr).close_time}) και θα ισχύει μόνο για τον admin.`}
+                  {timeToMinutes(entryPopover.time) + entryEstDuration() <= 24 * 60 && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!entryPopover.extendHours}
+                        onChange={e => setEntryPopover({ ...entryPopover, extendHours: e.target.checked })}
+                      />
+                      Επέκταση ωραρίου για πελάτισσες
+                    </label>
+                  )}
                 </div>
               )}
               {entryEndsAfterClose() && (
                 <div style={{ background: 'var(--info-bg)', color: 'var(--info)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
-                  {`Θα τελειώσει στις ${minutesToTime(timeToMinutes(entryPopover.time) + entryEstDuration())}, μετά το κλείσιμο (${effectiveHours(entryPopover.dateStr).close_time}). Το ωράριο της ημέρας δεν αλλάζει.`}
+                  {`Θα τελειώσει στις ${minutesToTime(timeToMinutes(entryPopover.time) + entryEstDuration())}, μετά το κλείσιμο (${effectiveHours(entryPopover.dateStr).close_time}).`}
                 </div>
               )}
 

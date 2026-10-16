@@ -571,6 +571,14 @@ const isWithinBusinessHours = async (date, time, durationMinutes, allowOvertime 
   return allowOvertime ? startsWithinHours(hours, time, durationMinutes) : fitsInHours(hours, time, durationMinutes);
 };
 
+const isValidAdminAppointment = (date, time, durationMinutes) => {
+  if (!isValidDate(date) || !isValidTime(time)) return false;
+  const duration = Number(durationMinutes);
+  if (!Number.isInteger(duration) || duration <= 0) return false;
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes + duration <= 24 * 60;
+};
+
 app.get('/api/business-hours/:date', async (req, res) => {
   if (!isValidDate(req.params.date)) return res.status(400).json({ error: "Μη έγκυρη ημερομηνία." });
   try {
@@ -589,7 +597,8 @@ app.get('/api/admin/business-hours', verifyAdmin, async (req, res) => {
 
 app.post('/api/admin/business-hours', verifyAdmin, async (req, res) => {
   const { date, open_time, close_time } = req.body;
-  if (!isValidDate(date) || !isValidTime(open_time) || !isValidTime(close_time) || open_time.slice(0, 5) >= close_time.slice(0, 5)) {
+  const validCloseTime = isValidTime(close_time) || close_time === '24:00';
+  if (!isValidDate(date) || !isValidTime(open_time) || !validCloseTime || open_time.slice(0, 5) >= close_time.slice(0, 5)) {
     return res.status(400).json({ error: "Μη έγκυρο ωράριο. Η ώρα έναρξης πρέπει να είναι πριν τη λήξη." });
   }
   try {
@@ -659,7 +668,10 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
     }
 
     lock = await acquireDateLock(appointment_date);
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, isAdmin, lock.client))) {
+    const validSlot = isAdmin
+      ? isValidAdminAppointment(appointment_date, appointment_time, effectiveDuration)
+      : await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, false, lock.client);
+    if (!validSlot) {
       if (paidIntent) {
         await refundIntent(paidIntent);
         return { status: 409, body: { error: "Η ώρα αυτή είναι εκτός ωραρίου λειτουργίας. Η χρέωση επιστράφηκε αυτόματα. Παρακαλούμε επιλέξτε άλλη ώρα." } };
@@ -814,7 +826,10 @@ app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
 
     const effectiveDuration = await getEffectiveDuration(apt.service_name, apt.duration);
     lock = await acquireDateLock(appointment_date);
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, req.isAdmin, lock.client))) {
+    const validSlot = req.isAdmin
+      ? isValidAdminAppointment(appointment_date, appointment_time, effectiveDuration)
+      : await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, false, lock.client);
+    if (!validSlot) {
       return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
     }
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id, lock.client);
@@ -843,7 +858,7 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
     }
 
     lock = await acquireDateLock(appointment_date);
-    if (!(await isWithinBusinessHours(appointment_date, appointment_time, effectiveDuration, true, lock.client))) {
+    if (!isValidAdminAppointment(appointment_date, appointment_time, effectiveDuration)) {
       return res.status(409).json({ error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." });
     }
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id, lock.client);
