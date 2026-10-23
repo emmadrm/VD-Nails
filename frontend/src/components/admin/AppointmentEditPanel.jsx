@@ -12,6 +12,7 @@ export default function AppointmentEditPanel({ apt, services, appointments, apiU
   const [form, setForm] = useState({
     client_name: apt.client_name,
     client_phone: apt.client_phone || '',
+    appointment_notes: apt.appointment_notes || '',
     appointment_date: formatLocalDate(apt.appointment_date),
     appointment_time: apt.appointment_time.slice(0, 5)
   });
@@ -38,7 +39,8 @@ export default function AppointmentEditPanel({ apt, services, appointments, apiU
         headers: getJsonHeaders(),
         body: JSON.stringify({
           client_name: form.client_name, client_phone: form.client_phone, client_email: apt.client_email,
-          appointment_date: form.appointment_date, appointment_time: form.appointment_time, services: selectedServices
+          appointment_date: form.appointment_date, appointment_time: form.appointment_time, services: selectedServices,
+          appointment_notes: form.appointment_notes
         })
       });
       if (!res.ok) {
@@ -80,6 +82,18 @@ export default function AppointmentEditPanel({ apt, services, appointments, apiU
             <label className="admin-label">Τηλέφωνο</label>
             <input type="tel" className="admin-input" value={form.client_phone} onChange={e => setForm({ ...form, client_phone: e.target.value })} />
           </div>
+          {!isBlocked && (
+            <div className="admin-field">
+              <label className="admin-label">Σχόλια / σημειώσεις</label>
+              <textarea
+                className="admin-input"
+                rows={3}
+                maxLength={2000}
+                value={form.appointment_notes}
+                onChange={e => setForm({ ...form, appointment_notes: e.target.value })}
+              />
+            </div>
+          )}
           <div className="admin-form-row">
             <div className="admin-field">
               <label className="admin-label">Ημερομηνία</label>

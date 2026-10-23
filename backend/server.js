@@ -281,6 +281,7 @@ const pickAppointmentPayload = (b = {}) => ({
   client_name: b.client_name, client_email: b.client_email, client_phone: b.client_phone,
   services: Array.isArray(b.services) ? b.services.map(s => ({ name: s && s.name })) : [],
   appointment_date: b.appointment_date, appointment_time: b.appointment_time,
+  appointment_notes: b.appointment_notes || '',
 });
 const pickPayload = (type, body) => (type === 'order' ? pickOrderPayload(body) : pickAppointmentPayload(body));
 
@@ -632,6 +633,11 @@ app.get('/api/appointments/check-availability', async (req, res) => {
 // Επιστρέφει { status, body } ώστε να καλείται τόσο από τον browser όσο και από το Stripe webhook.
 const createAppointment = async (data, { isAdmin = false, paidIntent = null } = {}) => {
   const { user_id, client_name, client_email, client_phone, services, appointment_date, appointment_time, duration } = data;
+  const rawNotes = data.appointment_notes ?? '';
+  if (typeof rawNotes !== 'string' || rawNotes.length > 2000) {
+    return { status: 400, body: { error: "Οι σημειώσεις δεν πρέπει να ξεπερνούν τους 2.000 χαρακτήρες." } };
+  }
+  const appointmentNotes = rawNotes.trim();
   let { service_name, service_price } = data;
   let lock = null;
   try {
@@ -693,8 +699,8 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
 
     const query = `
       INSERT INTO appointments
-      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration, stripe_payment_intent_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration, stripe_payment_intent_id, appointment_notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING id`;
 
     const values = [
@@ -710,7 +716,8 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
       'completed',
       'confirmed',
       effectiveDuration,
-      paidIntent ? paidIntent.id : null
+      paidIntent ? paidIntent.id : null,
+      appointmentNotes || null
     ];
 
     const result = await lock.client.query(query, values);
@@ -765,10 +772,10 @@ const isFutureSlot = async (date, time) => {
 
 app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
-  const { status, paid_amount } = req.body;
+  const { status, paid_amount, paid_method } = req.body;
   if (!APPOINTMENT_STATUSES.includes(status)) return res.status(400).json({ error: "Μη έγκυρη κατάσταση ραντεβού." });
-  if (paid_amount !== undefined && (!req.isAdmin || status !== 'completed')) {
-    return res.status(400).json({ error: "Το ποσό πληρωμής μπορεί να οριστεί μόνο από τον admin κατά την ολοκλήρωση." });
+  if ((paid_amount !== undefined || paid_method !== undefined) && (!req.isAdmin || status !== 'completed')) {
+    return res.status(400).json({ error: "Τα στοιχεία πληρωμής μπορούν να οριστούν μόνο από τον admin κατά την ολοκλήρωση." });
   }
   let lock = null;
   try {
@@ -776,10 +783,14 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
     if (!apt) return res.status(404).json({ error: "Το ραντεβού δεν βρέθηκε." });
 
     let completedAmount = null;
-    if (req.isAdmin && status === 'completed') {
+    const requiresPaymentDetails = req.isAdmin && status === 'completed' && apt.client_name !== BLOCKED_CLIENT_NAME;
+    if (requiresPaymentDetails) {
       const amountText = String(paid_amount ?? apt.service_price);
       if (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(amountText)) {
         return res.status(400).json({ error: "Συμπληρώστε έγκυρο ποσό με έως δύο δεκαδικά ψηφία." });
+      }
+      if (!['cash', 'card'].includes(paid_method)) {
+        return res.status(400).json({ error: "Επιλέξτε αν η πληρωμή έγινε με μετρητά ή κάρτα." });
       }
       completedAmount = Number(amountText.replace(',', '.')).toFixed(2);
     }
@@ -803,10 +814,29 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
       }
     }
 
+    const shouldNotifyCancellation = status === 'cancelled' &&
+      apt.status !== 'cancelled' &&
+      apt.client_name !== BLOCKED_CLIENT_NAME &&
+      apt.client_phone;
     await lock.client.query(
-      'UPDATE appointments SET status = $1, paid_amount = $2 WHERE id = $3',
-      [status, completedAmount, id]
+      `UPDATE appointments
+       SET status = $1,
+           paid_amount = CASE WHEN $1 = 'completed' AND $2 IS NOT NULL THEN $2 ELSE paid_amount END,
+           completion_payment_method = CASE WHEN $1 = 'completed' AND $3 IS NOT NULL THEN $3 ELSE completion_payment_method END
+       WHERE id = $4`,
+      [status, completedAmount, requiresPaymentDetails ? paid_method : null, id]
     );
+    await lock.release();
+    lock = null;
+    if (shouldNotifyCancellation) {
+      const [year, month, day] = apt.date_str.split('-');
+      const appointmentDate = `${day}/${month}/${year}`;
+      const appointmentTime = apt.appointment_time.slice(0, 5);
+      await sendBrevoSms(
+        apt.client_phone,
+        `Το ραντεβού σας στις ${appointmentDate} και ώρα ${appointmentTime} για ${apt.service_name} ακυρώθηκε. VD Nails.`
+      );
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
   finally { if (lock) await lock.release().catch(() => {}); }
@@ -859,6 +889,11 @@ app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
 app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
   const { id } = req.params;
   const { client_name, client_phone, client_email, services, appointment_date, appointment_time } = req.body;
+  const rawNotes = req.body.appointment_notes ?? '';
+  if (typeof rawNotes !== 'string' || rawNotes.length > 2000) {
+    return res.status(400).json({ error: "Οι σημειώσεις δεν πρέπει να ξεπερνούν τους 2.000 χαρακτήρες." });
+  }
+  const appointmentNotes = rawNotes.trim();
   let { service_name, service_price } = req.body;
   let lock = null;
   try {
@@ -881,13 +916,13 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
 
     if (services && services.length) {
       await lock.client.query(
-        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5, appointment_date=$6, appointment_time=$7, duration=$8 WHERE id=$9',
-        [client_name, client_phone, client_email, service_name, service_price, appointment_date, appointment_time, effectiveDuration, id]
+        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5, appointment_date=$6, appointment_time=$7, duration=$8, appointment_notes=$9 WHERE id=$10',
+        [client_name, client_phone, client_email, service_name, service_price, appointment_date, appointment_time, effectiveDuration, appointmentNotes || null, id]
       );
     } else {
       await lock.client.query(
-        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7 WHERE id=$8',
-        [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, id]
+        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7, appointment_notes=$8 WHERE id=$9',
+        [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, appointmentNotes || null, id]
       );
     }
     res.json({ success: true });
@@ -952,7 +987,7 @@ app.delete('/api/products/:id', verifyAdmin, async (req, res) => {
 
 app.get('/api/services', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM services ORDER BY category, id ASC');
+    const result = await pool.query("SELECT * FROM services WHERE category <> 'Πρόσωπο' ORDER BY category, id ASC");
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });

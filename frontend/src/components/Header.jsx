@@ -137,7 +137,6 @@ function Header({ cart, setCart }) {
               <ul className="services-dropdown-menu">
                 <li><Link to="/services/Χέρια" className="services-dropdown-link">{t('header.categoryHands')}</Link></li>
                 <li><Link to="/services/Πόδια" className="services-dropdown-link">{t('header.categoryFeet')}</Link></li>
-                <li><Link to="/services/Πρόσωπο" className="services-dropdown-link">{t('header.categoryFace')}</Link></li>
               </ul>
             </li>
             <li className="services-nav-item">

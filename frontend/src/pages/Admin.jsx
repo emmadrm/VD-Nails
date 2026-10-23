@@ -46,7 +46,7 @@ export default function Admin() {
   };
 
   // State για το Καθολικό Modal Επιβεβαίωσης
-  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' });
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Tabs
@@ -119,15 +119,17 @@ export default function Admin() {
       busy: false,
       inputLabel: options.inputLabel || '',
       inputValue: options.inputValue ?? '',
-      onConfirm: async (inputValue) => {
+      selectLabel: options.selectLabel || '',
+      selectValue: options.selectValue || '',
+      onConfirm: async (inputValue, selectValue) => {
         if (confirmBusyRef.current) return;
         confirmBusyRef.current = true;
         setConfirmDialog(d => ({ ...d, busy: true }));
         try {
-          await actionCallback(inputValue);
+          await actionCallback(inputValue, selectValue);
         } finally {
           confirmBusyRef.current = false;
-          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' });
+          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' });
         }
       }
     });
@@ -197,7 +199,7 @@ export default function Admin() {
   const fetchServices = async () => {
     try {
       const res = await fetch(`${API_URL}/api/services`, { headers: getJsonHeaders() });
-      setServices(await res.json());
+      setServices((await res.json()).filter(service => service.category !== 'Πρόσωπο'));
     } catch (err) { toast.error("Σφάλμα φόρτωσης υπηρεσιών."); }
   };
 
@@ -377,11 +379,11 @@ export default function Admin() {
     const action = APPOINTMENT_STATUS_ACTIONS[status];
     const appointment = appointments.find(apt => apt.id === id);
     const needsPaidAmount = status === 'completed' && appointment && appointment.client_name !== BLOCKED_CLIENT_NAME;
-    triggerConfirm(action.title, action.message, async (paidAmount) => {
+    triggerConfirm(action.title, action.message, async (paidAmount, paidMethod) => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}/status`, {
           method: 'PUT', headers: getJsonHeaders(),
-          body: JSON.stringify({ status, ...(needsPaidAmount ? { paid_amount: paidAmount } : {}) })
+          body: JSON.stringify({ status, ...(needsPaidAmount ? { paid_amount: paidAmount, paid_method: paidMethod } : {}) })
         });
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) return handleAuthError(res.status);
@@ -393,7 +395,9 @@ export default function Admin() {
       } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
     }, needsPaidAmount ? {
       inputLabel: 'Ποσό που πληρώθηκε (€)',
-      inputValue: Number(appointment.service_price || 0).toFixed(2)
+      inputValue: Number(appointment.service_price || 0).toFixed(2),
+      selectLabel: 'Τρόπος πληρωμής',
+      selectValue: ''
     } : {});
   };
 
@@ -487,6 +491,11 @@ export default function Admin() {
                       <tr><td colSpan={5} className="admin-empty">Δεν βρέθηκαν ραντεβού.</td></tr>
                     ) : filteredAppointments.map(apt => {
                       const isBlocked = apt.client_name === BLOCKED_CLIENT_NAME;
+                      const paymentLabel = apt.completion_payment_method === 'cash'
+                        ? 'Μετρητά'
+                        : apt.completion_payment_method === 'card'
+                          ? 'Κάρτα'
+                          : apt.payment_type || 'Κατάστημα';
                       return (
                         <tr key={apt.id} className={isBlocked ? 'is-flagged' : ''}>
                           <td data-label="Πελάτης">
@@ -501,6 +510,7 @@ export default function Admin() {
                           </td>
                           <td data-label="Υπηρεσία">
                             <span className="admin-badge admin-badge-brand">{apt.service_name}</span>
+                            {apt.appointment_notes && <span className="admin-cell-sub" title={apt.appointment_notes}>Σημείωση: {apt.appointment_notes}</span>}
                             {apt.status === 'cancelled' && <span className="admin-badge admin-badge-danger" style={{ marginLeft: 6 }}>Ακυρωμένο</span>}
                             {apt.status === 'completed' && <span className="admin-badge admin-badge-success" style={{ marginLeft: 6 }}>Ολοκληρωμένο</span>}
                           </td>
@@ -508,7 +518,7 @@ export default function Admin() {
                             {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')}
                             <span className="admin-cell-sub">{apt.appointment_time.slice(0, 5)}</span>
                           </td>
-                          <td data-label="Πληρωμή"><span className={`admin-badge ${apt.payment_type?.includes('Stripe') ? 'admin-badge-success' : 'admin-badge-neutral'}`}>{apt.payment_type || 'Κατάστημα'}</span></td>
+                          <td data-label="Πληρωμή"><span className={`admin-badge ${apt.completion_payment_method === 'card' || (!apt.completion_payment_method && apt.payment_type?.includes('Stripe')) ? 'admin-badge-success' : 'admin-badge-neutral'}`}>{paymentLabel}</span></td>
                           <td data-label="Ενέργειες">
                             <div className="admin-row-actions">
                               {apt.status !== 'completed' && apt.status !== 'cancelled' && (
@@ -739,7 +749,6 @@ export default function Admin() {
                   <select className="admin-select" value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}>
                     <option value="Χέρια">Χέρια</option>
                     <option value="Πόδια">Πόδια</option>
-                    <option value="Πρόσωπο">Πρόσωπο</option>
                   </select>
                 </div>
 
@@ -775,7 +784,7 @@ export default function Admin() {
             <div className="admin-card">
               <h3 className="admin-h" style={{ marginBottom: 18 }}>Κατάλογος υπηρεσιών</h3>
               <div className="admin-stack">
-                {['Χέρια', 'Πόδια', 'Πρόσωπο'].map(category => {
+                {['Χέρια', 'Πόδια'].map(category => {
                   const categoryServices = services.filter(s => s.category === category);
                   if (categoryServices.length === 0) return null;
                   return (
@@ -1034,15 +1043,30 @@ export default function Admin() {
                   />
                 </div>
               )}
+              {confirmDialog.selectLabel && (
+                <div className="admin-field" style={{ textAlign: 'left', marginBottom: 20 }}>
+                  <label className="admin-label">{confirmDialog.selectLabel}</label>
+                  <select
+                    className="admin-select"
+                    required
+                    value={confirmDialog.selectValue}
+                    onChange={e => setConfirmDialog(d => ({ ...d, selectValue: e.target.value }))}
+                  >
+                    <option value="">Επιλέξτε τρόπο πληρωμής</option>
+                    <option value="cash">Μετρητά</option>
+                    <option value="card">Κάρτα</option>
+                  </select>
+                </div>
+              )}
               <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
                 <button
                   className="pro-btn primary"
-                  onClick={() => confirmDialog.onConfirm(confirmDialog.inputValue)}
-                  disabled={confirmDialog.busy || (confirmDialog.inputLabel && (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(confirmDialog.inputValue)))}
+                  onClick={() => confirmDialog.onConfirm(confirmDialog.inputValue, confirmDialog.selectValue)}
+                  disabled={confirmDialog.busy || (confirmDialog.inputLabel && (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(confirmDialog.inputValue))) || (confirmDialog.selectLabel && !confirmDialog.selectValue)}
                 >
                   {confirmDialog.busy ? 'Παρακαλώ περιμένετε…' : 'Ναι, επιβεβαίωση'}
                 </button>
-                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '' })} disabled={confirmDialog.busy}>Άκυρο</button>
+                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' })} disabled={confirmDialog.busy}>Άκυρο</button>
               </div>
             </div>
           </div>

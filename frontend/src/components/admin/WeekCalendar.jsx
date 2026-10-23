@@ -124,7 +124,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     setEntryPopover({
       dateStr, time: minutesToTime(snapped), mode: 'book',
       clientSearch: '', selectedClient: null, newClient: null, creatingClient: false, selectedServices: [],
-      blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60, allDay: false, extendHours: false
+      appointmentNotes: '', blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60, allDay: false, extendHours: false
     });
   };
 
@@ -246,7 +246,8 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
       payload = {
         user_id: client.id, client_name: client.name, client_email: client.email, client_phone: client.phone,
         services: entryPopover.selectedServices, appointment_date: entryPopover.dateStr,
-        appointment_time: entryPopover.time, payment_method: 'store'
+        appointment_time: entryPopover.time, payment_method: 'store',
+        appointment_notes: entryPopover.appointmentNotes
       };
     } else {
       payload = {
@@ -493,6 +494,16 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                   <div className="admin-field">
                     <label className="admin-label">Υπηρεσίες</label>
                     <ServicePicker services={services} selected={entryPopover.selectedServices} onChange={(v) => setEntryPopover({ ...entryPopover, selectedServices: v })} />
+                  </div>
+                  <div className="admin-field">
+                    <label className="admin-label">Σχόλια / σημειώσεις</label>
+                    <textarea
+                      className="admin-input"
+                      rows={3}
+                      maxLength={2000}
+                      value={entryPopover.appointmentNotes}
+                      onChange={e => setEntryPopover({ ...entryPopover, appointmentNotes: e.target.value })}
+                    />
                   </div>
                 </>
               ) : (

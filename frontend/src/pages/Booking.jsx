@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../index.css'; 
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import DatePicker, { registerLocale } from "react-datepicker";
@@ -19,7 +19,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 
 // --- ΦΟΡΜΑ ΠΛΗΡΩΜΗΣ STRIPE ---
-const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmitting }) => {
+const AppointmentPaymentForm = ({ totalAmount, clientSecret, payload, setIsSubmitting, isSubmitting }) => {
   const { t } = useTranslation();
   const stripe = useStripe();
   const elements = useElements();
@@ -34,19 +34,12 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
     setStripeError(null);
 
     try {
-      const res = await fetch(`${API_URL}/create-payment-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'appointment', services: payload.services })
-      });
-      
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      
-      const clientSecret = data.clientSecret;
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setStripeError(submitError.message);
+        return;
+      }
 
-      // Τα στοιχεία του ραντεβού αποθηκεύονται στον server ΠΡΙΝ τη χρέωση, ώστε το ραντεβού να καταχωρηθεί
-      // ακόμα κι αν ο πελάτης κλείσει τη σελίδα ή χαθεί η σύνδεση αμέσως μετά την πληρωμή
       const prepareRes = await fetch(`${API_URL}/api/checkout/prepare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,16 +50,18 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
         throw new Error(errData.error || t('booking.errorBank'));
       }
 
-      const result = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card: elements.getElement(CardElement),
-          billing_details: { name: payload.client_name },
-        }
+      const result = await stripe.confirmPayment({
+        elements,
+        clientSecret,
+        redirect: 'if_required',
+        confirmParams: {
+          return_url: `${window.location.origin}/success`,
+        },
       });
 
       if (result.error) {
         setStripeError(result.error.message);
-      } else if (result.paymentIntent.status === 'succeeded') {
+      } else if (result.paymentIntent?.status === 'succeeded') {
         const stripeId = result.paymentIntent.id;
         
         // 1. ΔΙΟΡΘΩΣΗ: Περνάμε το stripe_payment_intent_id και αλλάζουμε το status σε 'completed'
@@ -89,10 +84,12 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
           const errData = await saveRes.json().catch(() => ({}));
           setStripeError(errData.error || t('booking.errorRegistration'));
         }
+      } else if (result.paymentIntent) {
+        navigate(`/success?payment_intent=${result.paymentIntent.id}`);
       }
     } catch (err) {
       console.error(err);
-      setStripeError(t('booking.errorBank'));
+      setStripeError(err.message || t('booking.errorBank'));
     } finally {
       setIsSubmitting(false); 
     }
@@ -100,9 +97,14 @@ const AppointmentPaymentForm = ({ totalAmount, payload, setIsSubmitting, isSubmi
 
   return (
     <div style={{ marginTop: '20px', background: '#f9fafb', padding: '20px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-      <h5 style={{ color: '#3b2b1f', marginBottom: '15px' }}>{t('booking.cardDetails')}</h5>
+      <h5 style={{ color: '#3b2b1f', marginBottom: '15px' }}>{t('booking.paymentMethod')}</h5>
       <div className="card-inputs-wrapper" style={{ padding: '15px', width: '100%', backgroundColor: '#ffffff', minHeight: '50px', borderRadius: '6px', border: '1px solid #d1d5db' }}>
-        <CardElement options={{ style: { base: { fontSize: '16px', color: '#3b2b1f' } } }} />
+        <PaymentElement
+          options={{
+            layout: { type: 'accordion', defaultCollapsed: false },
+            wallets: { applePay: 'auto', googlePay: 'auto' },
+          }}
+        />
       </div>
       
       {stripeError && <div style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.9rem', fontWeight: 'bold' }}>{stripeError}</div>}
@@ -128,6 +130,7 @@ export default function Booking() {
   const [loadingTimes, setLoadingTimes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState('');
 
   const storedUser = JSON.parse(localStorage.getItem('vd_user') || '{}');
   const isLoggedIn = !!storedUser.id;
@@ -137,6 +140,7 @@ export default function Booking() {
     email: storedUser.email || '',
     phone: storedUser.phone || ''
   });
+  const [appointmentNotes, setAppointmentNotes] = useState('');
 
   const [formData, setFormData] = useState({
     date: null,
@@ -151,13 +155,14 @@ export default function Booking() {
     fetch(`${API_URL}/api/services`)
       .then(res => res.json())
       .then(data => {
-        setDbServices(data);
+        const activeServices = data.filter(s => s.category !== 'Πρόσωπο');
+        setDbServices(activeServices);
         let initialId = '';
         if (serviceName) {
-            const found = data.find(s => s.name === serviceName);
+            const found = activeServices.find(s => s.name === serviceName);
             if (found) initialId = found.id.toString();
         } else if (stateCategory) {
-            const categoryServices = data.filter(s => s.category === stateCategory);
+            const categoryServices = activeServices.filter(s => s.category === stateCategory);
             if (categoryServices.length > 0) initialId = categoryServices[0].id.toString();
         }
         setSelectedServiceIds(initialId ? [initialId] : []);
@@ -173,6 +178,8 @@ export default function Booking() {
     const idStr = id.toString();
     setSelectedServiceIds(prev => prev.includes(idStr) ? prev.filter(x => x !== idStr) : [...prev, idStr]);
     setFormData(prev => ({ ...prev, time: '' }));
+    setPaymentClientSecret('');
+    setShowStripeForm(false);
   };
 
   useEffect(() => {
@@ -232,6 +239,7 @@ export default function Booking() {
       client_name: clientData.name,
       client_email: clientData.email,
       client_phone: clientData.phone,
+      appointment_notes: appointmentNotes,
       services: selectedServiceObjs.map(s => ({ name: s.name, price: Number(s.price), duration_minutes: parseInt(s.duration_minutes) })),
       appointment_date: localFormattedDate,
       appointment_time: formData.time,
@@ -257,7 +265,22 @@ export default function Booking() {
     setErrors({});
 
     if (formData.payment === 'prepay') {
-      setShowStripeForm(true);
+      setIsSubmitting(true);
+      try {
+        const res = await fetch(`${API_URL}/create-payment-intent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'appointment', services: selectedServiceObjs.map(s => ({ name: s.name, price: Number(s.price), duration_minutes: parseInt(s.duration_minutes) })) })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.clientSecret) throw new Error(data.error || t('booking.errorBank'));
+        setPaymentClientSecret(data.clientSecret);
+        setShowStripeForm(true);
+      } catch (err) {
+        toast.error(err.message || t('booking.errorBank'));
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
 
@@ -326,6 +349,20 @@ export default function Booking() {
           </div>
 
           <div>
+            <label htmlFor="appointment-notes" className="fw-bold mb-2 d-block">{t('booking.notesLabel')}</label>
+            <textarea
+              id="appointment-notes"
+              className="form-control vd-input"
+              rows={3}
+              maxLength={2000}
+              placeholder={t('booking.notesPlaceholder')}
+              disabled={showStripeForm}
+              value={appointmentNotes}
+              onChange={e => setAppointmentNotes(e.target.value)}
+            />
+          </div>
+
+          <div>
             <label className="fw-bold mb-2 d-block">{t('booking.selectServices')}</label>
             {errors.service && <div className="text-danger small mb-2">{errors.service}</div>}
             {Object.entries(groupedServices).map(([category, categoryServices]) => (
@@ -354,7 +391,7 @@ export default function Booking() {
             <DatePicker
               selected={formData.date}
               disabled={showStripeForm}
-              onChange={(d) => { setFormData({ ...formData, date: d, time: '' }); setErrors({}); setShowStripeForm(false); }}
+              onChange={(d) => { setFormData({ ...formData, date: d, time: '' }); setErrors({}); setShowStripeForm(false); setPaymentClientSecret(''); }}
               dateFormat="dd/MM/yyyy" minDate={new Date()} filterDate={isOpenWeekday} className="form-control vd-input w-100" placeholderText={t('booking.selectDate')} required
             />
           </div>
@@ -366,7 +403,7 @@ export default function Booking() {
               {loadingTimes ? <p className="text-muted">{t('booking.searching')}</p> : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '10px' }}>
                   {availableTimes.length > 0 ? availableTimes.map(time => (
-                    <button key={time} type="button" disabled={showStripeForm} onClick={() => { setFormData({ ...formData, time: time }); setErrors({}); setShowStripeForm(false); }}
+                    <button key={time} type="button" disabled={showStripeForm} onClick={() => { setFormData({ ...formData, time: time }); setErrors({}); setShowStripeForm(false); setPaymentClientSecret(''); }}
                       className={`time-slot-btn${formData.time === time ? ' selected' : ''}`}>
                       {time}
                     </button>
@@ -382,25 +419,25 @@ export default function Booking() {
                <div className="d-flex flex-column gap-2">
                  <label className={`payment-option${formData.payment === 'store' ? ' selected' : ''}`}>
                    <input type="radio" name="payment" value="store" checked={formData.payment === 'store'}
-                     onChange={(e) => { setFormData({...formData, payment: e.target.value}); setShowStripeForm(false); }} />
+                     onChange={(e) => { setFormData({...formData, payment: e.target.value}); setShowStripeForm(false); setPaymentClientSecret(''); }} />
                    {t('booking.payAtStore')}
                  </label>
                  <label className={`payment-option${formData.payment === 'prepay' ? ' selected' : ''}`}>
                    <input type="radio" name="payment" value="prepay" checked={formData.payment === 'prepay'}
-                     onChange={(e) => setFormData({...formData, payment: e.target.value})} />
+                     onChange={(e) => { setFormData({...formData, payment: e.target.value}); setShowStripeForm(false); setPaymentClientSecret(''); }} />
                    {t('booking.payNow')}
                  </label>
                </div>
             </div>
           )}
 
-          {showStripeForm && selectedServiceObjs.length > 0 ? (
-            <Elements stripe={stripePromise}>
-              <AppointmentPaymentForm totalAmount={totalPrice} payload={getBookingPayload()} setIsSubmitting={setIsSubmitting} isSubmitting={isSubmitting} />
+          {showStripeForm && paymentClientSecret && selectedServiceObjs.length > 0 ? (
+            <Elements stripe={stripePromise} options={{ clientSecret: paymentClientSecret }}>
+              <AppointmentPaymentForm totalAmount={totalPrice} clientSecret={paymentClientSecret} payload={getBookingPayload()} setIsSubmitting={setIsSubmitting} isSubmitting={isSubmitting} />
             </Elements>
           ) : (
             <button type="submit" disabled={isSubmitting} className="pay-now-btn">
-              {isSubmitting ? t('booking.processing') : t('booking.confirmBooking')}
+              {isSubmitting ? (formData.payment === 'prepay' ? t('booking.processingPayment') : t('booking.processing')) : t('booking.confirmBooking')}
             </button>
           )}
 

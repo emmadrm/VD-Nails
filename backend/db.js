@@ -87,6 +87,8 @@ const initDatabase = async () => {
     // να λείπει, ώστε ο admin να μπορεί να κλείνει ραντεβού για πελάτες χωρίς λογαριασμό/email ακόμα.
     await pool.query(`ALTER TABLE appointments ALTER COLUMN client_email DROP NOT NULL;`);
     await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(10,2);`);
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS completion_payment_method VARCHAR(20);`);
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS appointment_notes TEXT;`);
 
     // 4. ΠΙΝΑΚΑΣ: Υπηρεσίες (Περιλαμβάνει πλέον description)
     await pool.query(`
@@ -157,8 +159,7 @@ const initDatabase = async () => {
         ('Χέρια', 'Μανικιούρ Απλό', 'Καθαρισμός επωνυχίων και περιποίηση νυχιών.', 15.00, 60),
         ('Χέρια', 'Μανικιούρ Ημιμόνιμο', 'Το κλασικό μανικιούρ με διάρκεια χρώματος έως 3 εβδομάδες.', 20.00, 90),
         ('Χέρια', 'Gel / Ακρυλικό', 'Ενίσχυση για τέλειο σχήμα και μεγάλη αντοχή.', 35.00, 120),
-        ('Πόδια', 'Πεντικιούρ Απλό', 'Περιποίηση πέλματος και νυχιών.', 20.00, 60),
-        ('Πρόσωπο', 'Καθαρισμός Προσώπου', 'Βαθύς καθαρισμός για λάμψη και αναζωογόνηση.', 40.00, 60);
+        ('Πόδια', 'Πεντικιούρ Απλό', 'Περιποίηση πέλματος και νυχιών.', 20.00, 60);
       `);
     }
 

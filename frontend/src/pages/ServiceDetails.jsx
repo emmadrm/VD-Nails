@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../index.css';
 
-const CATEGORY_KEYS = { 'Χέρια': 'hands', 'Πόδια': 'feet', 'Πρόσωπο': 'face' };
+const CATEGORY_KEYS = { 'Χέρια': 'hands', 'Πόδια': 'feet' };
 
 export default function ServiceDetails() {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -14,11 +14,14 @@ export default function ServiceDetails() {
   const categoryLabel = CATEGORY_KEYS[category] ? t(`categories.${CATEGORY_KEYS[category]}`) : category;
 
   useEffect(() => {
+    if (!CATEGORY_KEYS[category]) return;
     fetch(`${API_URL}/api/services`)
       .then(res => res.json())
       .then(data => setServices(data.filter(s => s.category === category)))
       .catch(err => console.error(err));
   }, [category]);
+
+  if (!CATEGORY_KEYS[category]) return <Navigate to="/services" replace />;
 
   return (
     <div className="container py-5">
