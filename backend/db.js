@@ -89,6 +89,7 @@ const initDatabase = async () => {
     await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(10,2);`);
     await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS completion_payment_method VARCHAR(20);`);
     await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS appointment_notes TEXT;`);
+    await pool.query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS confirmation_sms_enabled BOOLEAN NOT NULL DEFAULT TRUE;`);
 
     // 4. ΠΙΝΑΚΑΣ: Υπηρεσίες (Περιλαμβάνει πλέον description)
     await pool.query(`

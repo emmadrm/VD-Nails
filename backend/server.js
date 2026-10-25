@@ -696,11 +696,12 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
     }
 
     let paymentTypeStr = paidIntent ? 'Online Πληρωμή (Κάρτα)' : 'Πληρωμή στο Κατάστημα';
+    const confirmationSmsEnabled = !isAdmin || data.send_confirmation_sms !== false;
 
     const query = `
       INSERT INTO appointments
-      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration, stripe_payment_intent_id, appointment_notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      (user_id, client_name, client_email, client_phone, service_name, service_price, appointment_date, appointment_time, payment_type, payment_status, status, duration, stripe_payment_intent_id, appointment_notes, confirmation_sms_enabled)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id`;
 
     const values = [
@@ -717,14 +718,15 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
       'confirmed',
       effectiveDuration,
       paidIntent ? paidIntent.id : null,
-      appointmentNotes || null
+      appointmentNotes || null,
+      confirmationSmsEnabled
     ];
 
     const result = await lock.client.query(query, values);
     await lock.release();
     lock = null;
 
-    if (client_name !== BLOCKED_CLIENT_NAME && (!isAdmin || data.send_confirmation_sms !== false)) {
+    if (client_name !== BLOCKED_CLIENT_NAME && confirmationSmsEnabled) {
       const formattedDateForSms = appointment_date.split('-').reverse().join('/');
       const smsContent = `Το ραντεβού σας για τις ${formattedDateForSms} στις ${String(appointment_time).slice(0, 5)} έχει επιβεβαιωθεί. Σε περιμένω!`;
       sendBrevoSms(client_phone, smsContent);
@@ -756,7 +758,7 @@ const CLIENT_CHANGE_MIN_HOURS = 24;
 // Φέρνει το ραντεβού μαζί με τις ώρες που απομένουν μέχρι την έναρξή του (ώρα Ελλάδας)
 const getAppointmentWithTiming = async (id) => {
   const result = await pool.query(
-    `SELECT id, user_id, client_name, client_phone, service_name, service_price, duration, status, appointment_time,
+    `SELECT id, user_id, client_name, client_phone, service_name, service_price, duration, status, appointment_time, confirmation_sms_enabled,
        TO_CHAR(appointment_date, 'YYYY-MM-DD') AS date_str,
        EXTRACT(EPOCH FROM (((appointment_date + appointment_time::time) AT TIME ZONE 'Europe/Athens') - NOW())) / 3600 AS hours_until
      FROM appointments WHERE id = $1`,
@@ -773,9 +775,13 @@ const isFutureSlot = async (date, time) => {
 app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
   const { id } = req.params;
   const { status, paid_amount, paid_method } = req.body;
+  const sendCancellationSms = req.body.send_cancellation_sms;
   if (!APPOINTMENT_STATUSES.includes(status)) return res.status(400).json({ error: "Μη έγκυρη κατάσταση ραντεβού." });
   if ((paid_amount !== undefined || paid_method !== undefined) && (!req.isAdmin || status !== 'completed')) {
     return res.status(400).json({ error: "Τα στοιχεία πληρωμής μπορούν να οριστούν μόνο από τον admin κατά την ολοκλήρωση." });
+  }
+  if (sendCancellationSms !== undefined && (!req.isAdmin || status !== 'cancelled' || typeof sendCancellationSms !== 'boolean')) {
+    return res.status(400).json({ error: "Η επιλογή SMS ακύρωσης δεν είναι έγκυρη." });
   }
   let lock = null;
   try {
@@ -817,7 +823,10 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
     const shouldNotifyCancellation = status === 'cancelled' &&
       apt.status !== 'cancelled' &&
       apt.client_name !== BLOCKED_CLIENT_NAME &&
-      apt.client_phone;
+      apt.client_phone &&
+      (req.isAdmin
+        ? sendCancellationSms === true
+        : apt.confirmation_sms_enabled !== false);
     await lock.client.query(
       `UPDATE appointments
        SET status = $1::varchar,

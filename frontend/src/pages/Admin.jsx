@@ -46,7 +46,7 @@ export default function Admin() {
   };
 
   // State για το Καθολικό Modal Επιβεβαίωσης
-  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' });
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '', checkboxLabel: '', checkboxValue: false });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Tabs
@@ -121,15 +121,17 @@ export default function Admin() {
       inputValue: options.inputValue ?? '',
       selectLabel: options.selectLabel || '',
       selectValue: options.selectValue || '',
-      onConfirm: async (inputValue, selectValue) => {
+      checkboxLabel: options.checkboxLabel || '',
+      checkboxValue: options.checkboxValue ?? false,
+      onConfirm: async (inputValue, selectValue, checkboxValue) => {
         if (confirmBusyRef.current) return;
         confirmBusyRef.current = true;
         setConfirmDialog(d => ({ ...d, busy: true }));
         try {
-          await actionCallback(inputValue, selectValue);
+          await actionCallback(inputValue, selectValue, checkboxValue);
         } finally {
           confirmBusyRef.current = false;
-          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' });
+          setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '', checkboxLabel: '', checkboxValue: false });
         }
       }
     });
@@ -382,11 +384,15 @@ export default function Admin() {
       ? { title: "Διόρθωση πληρωμής", message: "Διόρθωσε το ποσό ή τον τρόπο πληρωμής για αυτό το ολοκληρωμένο ραντεβού.", success: "Τα στοιχεία πληρωμής ενημερώθηκαν." }
       : APPOINTMENT_STATUS_ACTIONS[status];
     const needsPaidAmount = status === 'completed' && appointment && appointment.client_name !== BLOCKED_CLIENT_NAME;
-    triggerConfirm(action.title, action.message, async (paidAmount, paidMethod) => {
+    triggerConfirm(action.title, action.message, async (paidAmount, paidMethod, sendCancellationSms) => {
       try {
         const res = await fetch(`${API_URL}/api/appointments/${id}/status`, {
           method: 'PUT', headers: getJsonHeaders(),
-          body: JSON.stringify({ status, ...(needsPaidAmount ? { paid_amount: paidAmount, paid_method: paidMethod } : {}) })
+          body: JSON.stringify({
+            status,
+            ...(needsPaidAmount ? { paid_amount: paidAmount, paid_method: paidMethod } : {}),
+            ...(status === 'cancelled' ? { send_cancellation_sms: sendCancellationSms } : {})
+          })
         });
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) return handleAuthError(res.status);
@@ -401,6 +407,9 @@ export default function Admin() {
       inputValue: Number(appointment.paid_amount ?? appointment.service_price ?? 0).toFixed(2),
       selectLabel: 'Τρόπος πληρωμής',
       selectValue: isPaymentCorrection ? appointment.completion_payment_method || '' : ''
+    } : status === 'cancelled' && appointment && appointment.client_name !== BLOCKED_CLIENT_NAME ? {
+      checkboxLabel: 'Αποστολή SMS ακύρωσης στον πελάτη',
+      checkboxValue: appointment.confirmation_sms_enabled !== false
     } : {});
   };
 
@@ -1064,15 +1073,26 @@ export default function Admin() {
                   </select>
                 </div>
               )}
+              {confirmDialog.checkboxLabel && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', marginBottom: 20 }}>
+                  <input
+                    type="checkbox"
+                    checked={confirmDialog.checkboxValue}
+                    onChange={e => setConfirmDialog(d => ({ ...d, checkboxValue: e.target.checked }))}
+                    disabled={confirmDialog.busy}
+                  />
+                  {confirmDialog.checkboxLabel}
+                </label>
+              )}
               <div className="pro-modal-actions" style={{ justifyContent: 'center' }}>
                 <button
                   className="pro-btn primary"
-                  onClick={() => confirmDialog.onConfirm(confirmDialog.inputValue, confirmDialog.selectValue)}
+                  onClick={() => confirmDialog.onConfirm(confirmDialog.inputValue, confirmDialog.selectValue, confirmDialog.checkboxValue)}
                   disabled={confirmDialog.busy || (confirmDialog.inputLabel && (!/^\d{1,8}(?:[.,]\d{1,2})?$/.test(confirmDialog.inputValue))) || (confirmDialog.selectLabel && !confirmDialog.selectValue)}
                 >
                   {confirmDialog.busy ? 'Παρακαλώ περιμένετε…' : 'Ναι, επιβεβαίωση'}
                 </button>
-                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '' })} disabled={confirmDialog.busy}>Άκυρο</button>
+                <button className="pro-btn secondary" onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null, inputLabel: '', inputValue: '', selectLabel: '', selectValue: '', checkboxLabel: '', checkboxValue: false })} disabled={confirmDialog.busy}>Άκυρο</button>
               </div>
             </div>
           </div>
