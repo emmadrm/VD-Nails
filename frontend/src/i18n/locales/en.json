@@ -128,7 +128,12 @@
     "gateTitle": "One step before booking",
     "gateText": "With a VD Nails account you can book appointments faster, view your history and manage your bookings whenever you like.",
     "gateRegister": "Create an Account",
-    "gateLogin": "Already have an account? Sign in"
+    "gateLogin": "Already have an account? Sign in",
+    "guestNotice": "You can book an appointment as a guest by filling in your details below.",
+    "continueAsGuest": "Continue as guest",
+    "gateLoginButton": "Sign in",
+    "registerPrompt": "Don't have an account?",
+    "registerPromptLink": "Create one in 2 min"
   },
   "checkout": {
     "title": "Checkout.",
@@ -140,6 +145,7 @@
     "phoneLabel": "Phone *",
     "notesLabel": "Order Notes",
     "notesPlaceholder": "Add any notes here...",
+    "guestNotice": "You can place your order as a guest by filling in your details.",
     "continue": "Continue",
     "errorName": "Please enter your full name.",
     "errorPhone": "Phone number must be exactly 10 digits.",

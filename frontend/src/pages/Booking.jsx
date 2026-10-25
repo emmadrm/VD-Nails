@@ -131,6 +131,7 @@ export default function Booking() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showStripeForm, setShowStripeForm] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState('');
+  const [continueAsGuest, setContinueAsGuest] = useState(false);
 
   const storedUser = JSON.parse(localStorage.getItem('vd_user') || '{}');
   const isLoggedIn = !!storedUser.id;
@@ -305,7 +306,7 @@ export default function Booking() {
     }
   };
 
-  if (!isLoggedIn) {
+  if (!isLoggedIn && !continueAsGuest) {
     return (
       <div className="booking-wrapper py-5">
         <div className="glass-card mx-auto" style={{ maxWidth: '520px', padding: '40px 35px', borderRadius: '15px' }}>
@@ -314,16 +315,20 @@ export default function Booking() {
               <img src="/logo.png" alt="VD Nails" />
             </div>
             <h2 className="booking-title text-center mb-3">{t('booking.gateTitle')}</h2>
-            <p className="booking-auth-gate-text">
-              {t('booking.gateText')}
-            </p>
+            <p className="booking-auth-gate-text">{t('booking.gateText')}</p>
             <div className="booking-auth-gate-actions">
-              <Link to="/login" state={{ from: '/booking', mode: 'register' }} className="pay-now-btn" style={{ margin: 0, display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
-                {t('booking.gateRegister')}
+              <button type="button" className="pay-now-btn" onClick={() => setContinueAsGuest(true)}>
+                {t('booking.continueAsGuest')}
+              </button>
+              <Link to="/login" state={{ from: '/booking', mode: 'login' }} className="pay-now-btn" style={{ margin: 0, display: 'inline-block', textDecoration: 'none', textAlign: 'center' }}>
+                {t('booking.gateLoginButton')}
               </Link>
-              <Link to="/login" state={{ from: '/booking', mode: 'login' }} className="booking-auth-gate-login-link">
-                {t('booking.gateLogin')}
-              </Link>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#6c757d' }}>
+                {t('booking.registerPrompt')}{' '}
+                <Link to="/login" state={{ from: '/booking', mode: 'register' }} className="booking-auth-gate-login-link">
+                  {t('booking.registerPromptLink')}
+                </Link>
+              </p>
             </div>
           </div>
         </div>

@@ -349,6 +349,7 @@ export default function Checkout({ cart, setCart }) {
          {/* ΒΗΜΑ 1: Στοιχεία */}
           <div className="checkout-block">
             <h3>{t('checkout.step1Title')}</h3>
+            {!loggedInUser && <p className="text-muted">{t('checkout.guestNotice')}</p>}
             <form onSubmit={handleContactSubmit}>
 
               <div className="form-group">

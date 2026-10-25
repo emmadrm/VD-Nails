@@ -517,6 +517,7 @@ export default function Admin() {
                               <>
                                 <button className="admin-name-link" onClick={() => fetchHistoryByPhone(apt.client_name, apt.client_phone)}>{apt.client_name}</button>
                                 <span className="admin-cell-sub">{apt.client_phone}</span>
+                                {!apt.user_id && <span className="admin-badge admin-badge-neutral" style={{ marginTop: 5 }}>Επισκέπτης</span>}
                               </>
                             )}
                           </td>
@@ -609,6 +610,7 @@ export default function Admin() {
                           <span className="admin-badge admin-badge-neutral">#{order.id}</span>
                           <strong style={{ display: 'block', marginTop: 4 }}>{order.client_name}</strong>
                           <span className="admin-cell-sub">{order.client_phone}</span>
+                          {!order.user_id && <span className="admin-badge admin-badge-neutral" style={{ marginTop: 5 }}>Επισκέπτης</span>}
                         </td>
                         <td data-label="Προϊόντα">
                           {order.products?.map((p, idx) => (
