@@ -756,7 +756,7 @@ const CLIENT_CHANGE_MIN_HOURS = 24;
 // Φέρνει το ραντεβού μαζί με τις ώρες που απομένουν μέχρι την έναρξή του (ώρα Ελλάδας)
 const getAppointmentWithTiming = async (id) => {
   const result = await pool.query(
-    `SELECT id, user_id, service_name, duration, status, appointment_time,
+    `SELECT id, user_id, client_name, service_name, service_price, duration, status, appointment_time,
        TO_CHAR(appointment_date, 'YYYY-MM-DD') AS date_str,
        EXTRACT(EPOCH FROM (((appointment_date + appointment_time::time) AT TIME ZONE 'Europe/Athens') - NOW())) / 3600 AS hours_until
      FROM appointments WHERE id = $1`,
@@ -838,7 +838,10 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
       );
     }
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error(`Appointment status update failed for appointment ${id}:`, err);
+    res.status(500).json({ error: err.message });
+  }
   finally { if (lock) await lock.release().catch(() => {}); }
 });
 
