@@ -724,7 +724,7 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
     await lock.release();
     lock = null;
 
-    if(client_name !== BLOCKED_CLIENT_NAME) {
+    if (client_name !== BLOCKED_CLIENT_NAME && (!isAdmin || data.send_confirmation_sms !== false)) {
       const formattedDateForSms = appointment_date.split('-').reverse().join('/');
       const smsContent = `Το ραντεβού σας για τις ${formattedDateForSms} στις ${String(appointment_time).slice(0, 5)} έχει επιβεβαιωθεί. Σε περιμένω!`;
       sendBrevoSms(client_phone, smsContent);

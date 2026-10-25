@@ -376,8 +376,11 @@ export default function Admin() {
   };
 
   const updateAppointmentStatus = (id, status) => {
-    const action = APPOINTMENT_STATUS_ACTIONS[status];
     const appointment = appointments.find(apt => apt.id === id);
+    const isPaymentCorrection = status === 'completed' && appointment?.status === 'completed';
+    const action = isPaymentCorrection
+      ? { title: "Διόρθωση πληρωμής", message: "Διόρθωσε το ποσό ή τον τρόπο πληρωμής για αυτό το ολοκληρωμένο ραντεβού.", success: "Τα στοιχεία πληρωμής ενημερώθηκαν." }
+      : APPOINTMENT_STATUS_ACTIONS[status];
     const needsPaidAmount = status === 'completed' && appointment && appointment.client_name !== BLOCKED_CLIENT_NAME;
     triggerConfirm(action.title, action.message, async (paidAmount, paidMethod) => {
       try {
@@ -395,9 +398,9 @@ export default function Admin() {
       } catch (err) { toast.error("Σφάλμα σύνδεσης."); }
     }, needsPaidAmount ? {
       inputLabel: 'Ποσό που πληρώθηκε (€)',
-      inputValue: Number(appointment.service_price || 0).toFixed(2),
+      inputValue: Number(appointment.paid_amount ?? appointment.service_price ?? 0).toFixed(2),
       selectLabel: 'Τρόπος πληρωμής',
-      selectValue: ''
+      selectValue: isPaymentCorrection ? appointment.completion_payment_method || '' : ''
     } : {});
   };
 
@@ -523,6 +526,9 @@ export default function Admin() {
                             <div className="admin-row-actions">
                               {apt.status !== 'completed' && apt.status !== 'cancelled' && (
                                 <button className="admin-icon-btn admin-icon-btn--success" onClick={() => updateAppointmentStatus(apt.id, 'completed')} title="Ολοκλήρωση"><IconCheck size={15} /></button>
+                              )}
+                              {apt.status === 'completed' && !isBlocked && (
+                                <button className="admin-icon-btn" onClick={() => updateAppointmentStatus(apt.id, 'completed')} title="Διόρθωση ποσού ή τρόπου πληρωμής"><IconEdit size={15} /></button>
                               )}
                               {apt.status === 'cancelled' ? (
                                 <button className="admin-icon-btn" onClick={() => updateAppointmentStatus(apt.id, 'confirmed')} title="Επαναφορά"><IconHistory size={15} /></button>

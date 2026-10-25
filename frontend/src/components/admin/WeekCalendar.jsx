@@ -124,7 +124,8 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     setEntryPopover({
       dateStr, time: minutesToTime(snapped), mode: 'book',
       clientSearch: '', selectedClient: null, newClient: null, creatingClient: false, selectedServices: [],
-      appointmentNotes: '', blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60, allDay: false, extendHours: false
+      appointmentNotes: '', sendConfirmationSms: true,
+      blockReason: 'Ρεπό / Προσωπικός Χρόνος', blockDuration: 60, allDay: false, extendHours: false
     });
   };
 
@@ -247,7 +248,8 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
         user_id: client.id, client_name: client.name, client_email: client.email, client_phone: client.phone,
         services: entryPopover.selectedServices, appointment_date: entryPopover.dateStr,
         appointment_time: entryPopover.time, payment_method: 'store',
-        appointment_notes: entryPopover.appointmentNotes
+        appointment_notes: entryPopover.appointmentNotes,
+        send_confirmation_sms: entryPopover.sendConfirmationSms
       };
     } else {
       payload = {
@@ -505,6 +507,14 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
                       onChange={e => setEntryPopover({ ...entryPopover, appointmentNotes: e.target.value })}
                     />
                   </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={entryPopover.sendConfirmationSms}
+                      onChange={e => setEntryPopover({ ...entryPopover, sendConfirmationSms: e.target.checked })}
+                    />
+                    Αποστολή SMS επιβεβαίωσης
+                  </label>
                 </>
               ) : (
                 <>
