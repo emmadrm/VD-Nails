@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconCalendar, IconCalendarCheck, IconBox, IconTag, IconChart, IconUsers, IconLogout } from './icons';
+import { IconCalendar, IconCalendarCheck, IconBox, IconTag, IconChart, IconUsers, IconLogout, IconHistory } from './icons';
 
 const NAV_GROUPS = [
   {
@@ -7,6 +7,12 @@ const NAV_GROUPS = [
     items: [
       { key: 'appointments', label: 'Λίστα ραντεβού', icon: IconCalendarCheck },
       { key: 'calendar', label: 'Ημερολόγιο', icon: IconCalendar }
+    ]
+  },
+  {
+    label: 'Αρχείο',
+    items: [
+      { key: 'history', label: 'Ιστορικό', icon: IconHistory }
     ]
   },
   {

@@ -21,7 +21,8 @@ const BLOCKED_CLIENT_NAME = "🔐 ΚΛΕΙΣΤΟ / ΡΕΠΟ";
 const BLOCKED_LABEL = "Κλειστό / Ρεπό";
 
 const PAGE_META = {
-  appointments: { title: 'Λίστα ραντεβού', subtitle: 'Αναζήτηση, φιλτράρισμα και διαχείριση όλων των κρατήσεων.' },
+  appointments: { title: 'Λίστα ραντεβού', subtitle: 'Αναζήτηση, φιλτράρισμα και διαχείριση ενεργών και ακυρωμένων κρατήσεων.' },
+  history: { title: 'Ιστορικό', subtitle: 'Ολοκληρωμένα ραντεβού.' },
   calendar: { title: 'Ημερολόγιο', subtitle: 'Πρόγραμμα εβδομάδας, ωράριο ανά ημέρα και κλείδωμα χρόνου — όλα σε ένα σημείο.' },
   orders: { title: 'Παραγγελίες', subtitle: 'Διαχείριση παραγγελιών του e-shop.' },
   products: { title: 'Προϊόντα', subtitle: 'Κατάλογος και αποθέματα e-shop.' },
@@ -358,11 +359,13 @@ export default function Admin() {
     });
   };
 
-  const filteredAppointments = appointments.filter(apt => {
+  const matchesAppointmentFilter = (apt) => {
     const matchesSearch = apt.client_name.toLowerCase().includes(searchTerm.toLowerCase()) || apt.service_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDate = dateFilter ? formatLocalDate(apt.appointment_date) === dateFilter : true;
     return matchesSearch && matchesDate;
-  });
+  };
+  const filteredAppointments = appointments.filter(apt => apt.status !== 'completed' && matchesAppointmentFilter(apt));
+  const completedAppointments = appointments.filter(apt => apt.status === 'completed' && matchesAppointmentFilter(apt));
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
@@ -449,7 +452,12 @@ export default function Admin() {
       <AdminSidebar
         activeTab={activeTab}
         onSelectTab={(tab) => { setActiveTab(tab); setEditingApt(null); if (tab !== 'users') setSelectedUserHistory(null); }}
-        counts={{ appointments: appointments.length, orders: orders.length, users: users.length }}
+        counts={{
+          appointments: appointments.filter(apt => apt.status !== 'completed').length,
+          history: appointments.filter(apt => apt.status === 'completed').length,
+          orders: orders.length,
+          users: users.length
+        }}
         onLogout={handleLogout}
         isOpen={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
@@ -557,6 +565,86 @@ export default function Admin() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <div>
+                <h3 className="admin-h">Ολοκληρωμένα ραντεβού</h3>
+                <p className="admin-subtle">{completedAppointments.length} εγγραφές</p>
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div className="admin-search">
+                  <IconSearch size={15} />
+                  <input type="text" className="admin-input" placeholder="Αναζήτηση πελάτη ή υπηρεσίας…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                </div>
+                <input type="date" className="admin-input" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+                {dateFilter && <button className="admin-icon-btn" onClick={() => setDateFilter('')} title="Καθαρισμός φίλτρου"><IconX size={14} /></button>}
+              </div>
+            </div>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Πελάτης</th>
+                    <th>Υπηρεσία</th>
+                    <th>Ημερομηνία &amp; ώρα</th>
+                    <th>Πληρωμή</th>
+                    <th style={{ textAlign: 'right' }}>Ενέργειες</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {completedAppointments.length === 0 ? (
+                    <tr><td colSpan={5} className="admin-empty">Δεν βρέθηκαν ολοκληρωμένα ραντεβού.</td></tr>
+                  ) : completedAppointments.map(apt => {
+                    const isBlocked = apt.client_name === BLOCKED_CLIENT_NAME;
+                    const paymentLabel = apt.completion_payment_method === 'cash'
+                      ? 'Μετρητά'
+                      : apt.completion_payment_method === 'card'
+                        ? 'Κάρτα'
+                        : apt.payment_type || 'Κατάστημα';
+                    return (
+                      <tr key={apt.id} className={isBlocked ? 'is-flagged' : ''}>
+                        <td data-label="Πελάτης">
+                          {isBlocked ? (
+                            <strong>{BLOCKED_LABEL}</strong>
+                          ) : (
+                            <>
+                              <button className="admin-name-link" onClick={() => fetchHistoryByPhone(apt.client_name, apt.client_phone)}>{apt.client_name}</button>
+                              <span className="admin-cell-sub">{apt.client_phone}</span>
+                              {!apt.user_id && <span className="admin-badge admin-badge-neutral" style={{ marginTop: 5 }}>Επισκέπτης</span>}
+                            </>
+                          )}
+                        </td>
+                        <td data-label="Υπηρεσία">
+                          <span className="admin-badge admin-badge-brand">{apt.service_name}</span>
+                          {apt.appointment_notes && <span className="admin-cell-sub" title={apt.appointment_notes}>Σημείωση: {apt.appointment_notes}</span>}
+                          <span className="admin-badge admin-badge-success" style={{ marginLeft: 6 }}>Ολοκληρωμένο</span>
+                        </td>
+                        <td data-label="Ημερομηνία & ώρα">
+                          {formatLocalDate(apt.appointment_date).split('-').reverse().join('/')}
+                          <span className="admin-cell-sub">{apt.appointment_time.slice(0, 5)}</span>
+                        </td>
+                        <td data-label="Πληρωμή">
+                          <span className={`admin-badge ${apt.completion_payment_method === 'card' || (!apt.completion_payment_method && apt.payment_type?.includes('Stripe')) ? 'admin-badge-success' : 'admin-badge-neutral'}`}>
+                            {paymentLabel}{apt.paid_amount != null ? ` · ${Number(apt.paid_amount).toFixed(2)}€` : ''}
+                          </span>
+                        </td>
+                        <td data-label="Ενέργειες">
+                          <div className="admin-row-actions">
+                            {!isBlocked && <button className="admin-icon-btn" onClick={() => updateAppointmentStatus(apt.id, 'completed')} title="Διόρθωση ποσού ή τρόπου πληρωμής"><IconEdit size={15} /></button>}
+                            <button className="admin-icon-btn" onClick={() => setEditingApt(apt)} title="Επεξεργασία"><IconEdit size={15} /></button>
+                            <button className="admin-icon-btn admin-icon-btn--danger" onClick={() => handleDeleteAppointment(apt.id)} title="Διαγραφή"><IconTrash size={15} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
