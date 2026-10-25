@@ -756,7 +756,7 @@ const CLIENT_CHANGE_MIN_HOURS = 24;
 // Φέρνει το ραντεβού μαζί με τις ώρες που απομένουν μέχρι την έναρξή του (ώρα Ελλάδας)
 const getAppointmentWithTiming = async (id) => {
   const result = await pool.query(
-    `SELECT id, user_id, client_name, service_name, service_price, duration, status, appointment_time,
+    `SELECT id, user_id, client_name, client_phone, service_name, service_price, duration, status, appointment_time,
        TO_CHAR(appointment_date, 'YYYY-MM-DD') AS date_str,
        EXTRACT(EPOCH FROM (((appointment_date + appointment_time::time) AT TIME ZONE 'Europe/Athens') - NOW())) / 3600 AS hours_until
      FROM appointments WHERE id = $1`,
@@ -820,9 +820,9 @@ app.put('/api/appointments/:id/status', verifyUserOrAdmin, async (req, res) => {
       apt.client_phone;
     await lock.client.query(
       `UPDATE appointments
-       SET status = $1,
-           paid_amount = CASE WHEN $1 = 'completed' AND $2 IS NOT NULL THEN $2 ELSE paid_amount END,
-           completion_payment_method = CASE WHEN $1 = 'completed' AND $3 IS NOT NULL THEN $3 ELSE completion_payment_method END
+       SET status = $1::varchar,
+           paid_amount = COALESCE($2::numeric, paid_amount),
+           completion_payment_method = COALESCE($3::varchar, completion_payment_method)
        WHERE id = $4`,
       [status, completedAmount, requiresPaymentDetails ? paid_method : null, id]
     );
