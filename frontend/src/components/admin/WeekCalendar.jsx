@@ -238,7 +238,7 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
     const needsExtend = entryOutsideHours();
     const extendHours = needsExtend && entryPopover.extendHours && !entryPopover.allDay;
     const conflict = entryConflict();
-    if (conflict) return toast.error(describeConflict(conflict, services, BLOCKED_CLIENT_NAME));
+    if (conflict && entryPopover.mode === 'block') return toast.error(describeConflict(conflict, services, BLOCKED_CLIENT_NAME));
     if (endMin > 24 * 60) return toast.error("Το ραντεβού πρέπει να ολοκληρώνεται μέσα στην ίδια ημέρα.");
 
     let payload;
@@ -567,12 +567,25 @@ export default function WeekCalendar({ apiUrl, getJsonHeaders, getAuthHeaders, a
               )}
 
               {entryConflict() && (
-                <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem' }}>
-                  {describeConflict(entryConflict(), services, BLOCKED_CLIENT_NAME)} Επιλέξτε άλλη ώρα.
+                <div style={{
+                  background: entryPopover.mode === 'book' ? 'var(--warning-bg)' : 'var(--danger-bg)',
+                  color: entryPopover.mode === 'book' ? 'var(--warning)' : 'var(--danger)',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.8rem'
+                }}>
+                  {describeConflict(entryConflict(), services, BLOCKED_CLIENT_NAME)}
+                  {entryPopover.mode === 'book'
+                    ? ' Θα καταχωρηθεί παρότι συμπίπτει με άλλο ραντεβού.'
+                    : ' Επιλέξτε άλλη ώρα.'}
                 </div>
               )}
 
-              <button className="admin-btn admin-btn-primary admin-btn-block" onClick={submitEntry} disabled={submittingEntry || !!entryConflict()}>
+              <button
+                className="admin-btn admin-btn-primary admin-btn-block"
+                onClick={submitEntry}
+                disabled={submittingEntry || (entryPopover.mode === 'block' && !!entryConflict())}
+              >
                 {submittingEntry ? 'Καταχώρηση…' : entryPopover.mode === 'book' ? 'Καταχώρηση ραντεβού' : 'Κλείδωμα ώρας'}
               </button>
             </div>

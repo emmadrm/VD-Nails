@@ -685,7 +685,8 @@ const createAppointment = async (data, { isAdmin = false, paidIntent = null } = 
       return { status: 409, body: { error: "Η επιλεγμένη ώρα είναι εκτός ωραρίου λειτουργίας. Παρακαλούμε επιλέξτε άλλη ώρα." } };
     }
 
-    const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, null, lock.client);
+    const overlap = !isAdmin &&
+      await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, null, lock.client);
 
     if (overlap) {
       if (paidIntent) {
