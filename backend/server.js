@@ -977,9 +977,9 @@ app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
 
     await lock.client.query(
       `UPDATE appointments
-       SET appointment_date=$1, appointment_time=$2,
+       SET appointment_date=$1::date, appointment_time=$2::varchar(50),
            reminder_sms_sent_at = CASE
-             WHEN appointment_date IS DISTINCT FROM $1 OR appointment_time IS DISTINCT FROM $2 THEN NULL
+             WHEN appointment_date IS DISTINCT FROM $1::date OR appointment_time IS DISTINCT FROM $2::varchar(50) THEN NULL
              ELSE reminder_sms_sent_at
            END
        WHERE id=$3`,
@@ -1021,10 +1021,10 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
     if (services && services.length) {
       await lock.client.query(
         `UPDATE appointments
-         SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5,
-             appointment_date=$6, appointment_time=$7, duration=$8, appointment_notes=$9,
+         SET client_name=$1, client_phone=$2::varchar(20), client_email=$3, service_name=$4, service_price=$5,
+             appointment_date=$6::date, appointment_time=$7::varchar(50), duration=$8, appointment_notes=$9,
              reminder_sms_sent_at = CASE
-               WHEN client_phone IS DISTINCT FROM $2 OR appointment_date IS DISTINCT FROM $6 OR appointment_time IS DISTINCT FROM $7 THEN NULL
+               WHEN client_phone IS DISTINCT FROM $2::varchar(20) OR appointment_date IS DISTINCT FROM $6::date OR appointment_time IS DISTINCT FROM $7::varchar(50) THEN NULL
                ELSE reminder_sms_sent_at
              END
          WHERE id=$10`,
@@ -1033,10 +1033,10 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
     } else {
       await lock.client.query(
         `UPDATE appointments
-         SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4,
-             appointment_date=$5, appointment_time=$6, duration=$7, appointment_notes=$8,
+         SET client_name=$1, client_phone=$2::varchar(20), client_email=$3, service_name=$4,
+             appointment_date=$5::date, appointment_time=$6::varchar(50), duration=$7, appointment_notes=$8,
              reminder_sms_sent_at = CASE
-               WHEN client_phone IS DISTINCT FROM $2 OR appointment_date IS DISTINCT FROM $5 OR appointment_time IS DISTINCT FROM $6 THEN NULL
+               WHEN client_phone IS DISTINCT FROM $2::varchar(20) OR appointment_date IS DISTINCT FROM $5::date OR appointment_time IS DISTINCT FROM $6::varchar(50) THEN NULL
                ELSE reminder_sms_sent_at
              END
          WHERE id=$9`,
