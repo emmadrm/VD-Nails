@@ -141,6 +141,85 @@ const verifyOwnUser = (req, res, next) => {
   });
 };
 
+let reminderJobRunning = false;
+let lastReminderCheck = '';
+
+const isAppointmentReminderTime = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Athens',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const localTime = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return localTime.hour === '10' && localTime.minute === '00'
+    ? `${localTime.year}-${localTime.month}-${localTime.day} ${localTime.hour}:${localTime.minute}`
+    : null;
+};
+
+const sendAppointmentReminders = async () => {
+  const reminderCheck = isAppointmentReminderTime();
+  if (!reminderCheck || reminderCheck === lastReminderCheck || reminderJobRunning) return;
+  lastReminderCheck = reminderCheck;
+  reminderJobRunning = true;
+
+  let client;
+  let lockAcquired = false;
+  const lockKey = 84271025;
+  try {
+    client = await pool.connect();
+    const lockResult = await client.query('SELECT pg_try_advisory_lock($1) AS acquired', [lockKey]);
+    lockAcquired = lockResult.rows[0].acquired;
+    if (!lockAcquired) return;
+
+    const dueAppointments = await client.query(
+      `SELECT id, client_phone, appointment_date::text AS appointment_date, appointment_time
+       FROM appointments
+       WHERE appointment_date = (NOW() AT TIME ZONE 'Europe/Athens')::date
+         AND (created_at AT TIME ZONE current_setting('TIMEZONE') AT TIME ZONE 'Europe/Athens')::date < appointment_date
+         AND status = 'confirmed'
+         AND client_name <> $1
+         AND client_phone IS NOT NULL
+         AND confirmation_sms_enabled = TRUE
+         AND reminder_sms_sent_at IS NULL
+       ORDER BY appointment_time`,
+      [BLOCKED_CLIENT_NAME]
+    );
+
+    for (const appointment of dueAppointments.rows) {
+      const date = appointment.appointment_date.split('-').reverse().join('/');
+      const time = appointment.appointment_time.slice(0, 5);
+      const sent = await sendBrevoSms(
+        appointment.client_phone,
+        `Υπενθυμίζουμε το ραντεβού σας για σήμερα ${date} στις ${time}.`
+      );
+      if (sent) {
+        await client.query(
+          'UPDATE appointments SET reminder_sms_sent_at = NOW() WHERE id = $1 AND reminder_sms_sent_at IS NULL',
+          [appointment.id]
+        );
+      } else {
+        console.error(`Appointment reminder SMS was not sent for appointment ${appointment.id}.`);
+      }
+    }
+  } catch (err) {
+    console.error('Appointment reminder job failed:', err);
+  } finally {
+    if (client && lockAcquired) {
+      try {
+        await client.query('SELECT pg_advisory_unlock($1)', [lockKey]);
+      } catch (err) {
+        console.error('Could not release appointment reminder lock:', err);
+      }
+    }
+    if (client) client.release();
+    reminderJobRunning = false;
+  }
+};
+
 const sendBrevoTemplateEmail = async (toEmail, toName, templateId, params) => {
   try {
     await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -171,8 +250,11 @@ const sendBrevoSms = async (phone, content) => {
     if (!response.ok) {
       const body = await response.text();
       console.error(`Brevo SMS failed: ${response.status} ${response.statusText} - ${body}`);
+      return false;
     }
+    return true;
   } catch (err) { console.error(err.message); }
+  return false;
 };
 
 const sendBrevoEmail = async (toEmail, subject, htmlContent) => {
@@ -893,7 +975,16 @@ app.put('/api/appointments/:id', verifyUserOrAdmin, async (req, res) => {
     const overlap = await hasAppointmentOverlap(appointment_date, appointment_time, effectiveDuration, id, lock.client);
     if (overlap) return res.status(409).json({ error: "Η επιλεγμένη ώρα δεν είναι διαθέσιμη. Παρακαλούμε επιλέξτε άλλη ώρα." });
 
-    await lock.client.query('UPDATE appointments SET appointment_date=$1, appointment_time=$2 WHERE id=$3', [appointment_date, appointment_time, id]);
+    await lock.client.query(
+      `UPDATE appointments
+       SET appointment_date=$1, appointment_time=$2,
+           reminder_sms_sent_at = CASE
+             WHEN appointment_date IS DISTINCT FROM $1 OR appointment_time IS DISTINCT FROM $2 THEN NULL
+             ELSE reminder_sms_sent_at
+           END
+       WHERE id=$3`,
+      [appointment_date, appointment_time, id]
+    );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
   finally { if (lock) await lock.release().catch(() => {}); }
@@ -929,12 +1020,26 @@ app.put('/api/appointments/:id/details', verifyAdmin, async (req, res) => {
 
     if (services && services.length) {
       await lock.client.query(
-        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5, appointment_date=$6, appointment_time=$7, duration=$8, appointment_notes=$9 WHERE id=$10',
+        `UPDATE appointments
+         SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, service_price=$5,
+             appointment_date=$6, appointment_time=$7, duration=$8, appointment_notes=$9,
+             reminder_sms_sent_at = CASE
+               WHEN client_phone IS DISTINCT FROM $2 OR appointment_date IS DISTINCT FROM $6 OR appointment_time IS DISTINCT FROM $7 THEN NULL
+               ELSE reminder_sms_sent_at
+             END
+         WHERE id=$10`,
         [client_name, client_phone, client_email, service_name, service_price, appointment_date, appointment_time, effectiveDuration, appointmentNotes || null, id]
       );
     } else {
       await lock.client.query(
-        'UPDATE appointments SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4, appointment_date=$5, appointment_time=$6, duration=$7, appointment_notes=$8 WHERE id=$9',
+        `UPDATE appointments
+         SET client_name=$1, client_phone=$2, client_email=$3, service_name=$4,
+             appointment_date=$5, appointment_time=$6, duration=$7, appointment_notes=$8,
+             reminder_sms_sent_at = CASE
+               WHEN client_phone IS DISTINCT FROM $2 OR appointment_date IS DISTINCT FROM $5 OR appointment_time IS DISTINCT FROM $6 THEN NULL
+               ELSE reminder_sms_sent_at
+             END
+         WHERE id=$9`,
         [client_name, client_phone, client_email, service_name, appointment_date, appointment_time, effectiveDuration, appointmentNotes || null, id]
       );
     }
@@ -1300,5 +1405,7 @@ const PORT = process.env.PORT || 5001;
 pool.initDatabase().finally(() => {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`✅ Server running on port ${PORT}`);
+    sendAppointmentReminders();
+    setInterval(sendAppointmentReminders, 30_000);
   });
 });

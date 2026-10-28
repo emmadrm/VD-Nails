@@ -133,7 +133,20 @@
     "continueAsGuest": "Continue as guest",
     "gateLoginButton": "Sign in",
     "registerPrompt": "Don't have an account?",
-    "registerPromptLink": "Create one in 2 min"
+    "registerPromptLink": "Create one in 2 min",
+    "appointmentPolicy": {
+      "title": "APPOINTMENT POLICY",
+      "tagline": "Respect for your time. Dedication to quality.",
+      "intro": "To ensure the high quality of our services and provide every client with excellent care, please arrive promptly for your scheduled appointment.",
+      "section1Title": "ARRIVAL TIME",
+      "section1Body": "Arriving more than 15 minutes late will result in automatic cancellation of the appointment.",
+      "section2Title": "REPEATED LATE ARRIVALS",
+      "section2Body": "Up to 2 instances of lateness exceeding 15 minutes are permitted.",
+      "section3Title": "BOOKING RESTRICTIONS",
+      "section3Body": "After a second violation, the salon reserves the right to permanently block the user from making new bookings.",
+      "respect": "Punctuality shows mutual respect and is essential to an excellent service experience.",
+      "thanks": "Thank you for choosing our services and respecting our time and work."
+    }
   },
   "checkout": {
     "title": "Checkout.",

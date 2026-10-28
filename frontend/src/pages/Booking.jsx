@@ -447,6 +447,32 @@ export default function Booking() {
           )}
 
         </form>
+
+        <section className="appointment-policy" aria-labelledby="appointment-policy-title">
+          <div className="appointment-policy-heading">
+            <span aria-hidden="true">✦</span>
+            <h3 id="appointment-policy-title">{t('booking.appointmentPolicy.title')}</h3>
+            <span aria-hidden="true">✦</span>
+          </div>
+          <p className="appointment-policy-tagline">{t('booking.appointmentPolicy.tagline')}</p>
+          <p>{t('booking.appointmentPolicy.intro')}</p>
+          <ol>
+            <li>
+              <strong>{t('booking.appointmentPolicy.section1Title')}</strong>
+              <p>{t('booking.appointmentPolicy.section1Body')}</p>
+            </li>
+            <li>
+              <strong>{t('booking.appointmentPolicy.section2Title')}</strong>
+              <p>{t('booking.appointmentPolicy.section2Body')}</p>
+            </li>
+            <li>
+              <strong>{t('booking.appointmentPolicy.section3Title')}</strong>
+              <p>{t('booking.appointmentPolicy.section3Body')}</p>
+            </li>
+          </ol>
+          <p>{t('booking.appointmentPolicy.respect')}</p>
+          <p className="appointment-policy-thanks">{t('booking.appointmentPolicy.thanks')}</p>
+        </section>
       </div>
     </div>
   );
