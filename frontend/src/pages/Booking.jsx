@@ -156,14 +156,13 @@ export default function Booking() {
     fetch(`${API_URL}/api/services`)
       .then(res => res.json())
       .then(data => {
-        const activeServices = data.filter(s => s.category !== 'Πρόσωπο');
-        setDbServices(activeServices);
+        setDbServices(data);
         let initialId = '';
         if (serviceName) {
-            const found = activeServices.find(s => s.name === serviceName);
+            const found = data.find(s => s.name === serviceName);
             if (found) initialId = found.id.toString();
         } else if (stateCategory) {
-            const categoryServices = activeServices.filter(s => s.category === stateCategory);
+            const categoryServices = data.filter(s => s.category === stateCategory);
             if (categoryServices.length > 0) initialId = categoryServices[0].id.toString();
         }
         setSelectedServiceIds(initialId ? [initialId] : []);

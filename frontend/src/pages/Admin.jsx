@@ -202,7 +202,7 @@ export default function Admin() {
   const fetchServices = async () => {
     try {
       const res = await fetch(`${API_URL}/api/services`, { headers: getJsonHeaders() });
-      setServices((await res.json()).filter(service => service.category !== 'Πρόσωπο'));
+      setServices(await res.json());
     } catch (err) { toast.error("Σφάλμα φόρτωσης υπηρεσιών."); }
   };
 
@@ -854,6 +854,7 @@ export default function Admin() {
                   <select className="admin-select" value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}>
                     <option value="Χέρια">Χέρια</option>
                     <option value="Πόδια">Πόδια</option>
+                    <option value="Πρόσωπο">Πρόσωπο</option>
                   </select>
                 </div>
 
@@ -889,7 +890,7 @@ export default function Admin() {
             <div className="admin-card">
               <h3 className="admin-h" style={{ marginBottom: 18 }}>Κατάλογος υπηρεσιών</h3>
               <div className="admin-stack">
-                {['Χέρια', 'Πόδια'].map(category => {
+                {['Χέρια', 'Πόδια', 'Πρόσωπο'].map(category => {
                   const categoryServices = services.filter(s => s.category === category);
                   if (categoryServices.length === 0) return null;
                   return (

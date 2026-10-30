@@ -13,7 +13,7 @@ function Services() {
           <h1 className="services-page-title">{t('services.title')}</h1>
           <p className="services-page-subtitle">{t('services.subtitle')}</p>
         </div>
-        <div className="row g-4 py-5 row-cols-1 row-cols-lg-2">
+        <div className="row g-4 py-5 row-cols-1 row-cols-lg-3">
           <Link to="/services/Χέρια" className="feature col service-feature-card service-tile-link">
             <div className="d-flex align-items-center justify-content-left mb-3 mx-2 service-icon-wrap">
             <svg viewBox="224.4106 183.989 37.4025 40.4673" width="70" height="70">
@@ -42,6 +42,17 @@ function Services() {
             </div>
             <h3 className="fs-2 text-black service-title">{t('services.feetTitle')}</h3>
             <p className="text-black service-desc">{t('services.feetDesc')}</p>
+            <span className="service-tile-cta">{t('services.cta')} <span className="service-tile-arrow">→</span></span>
+          </Link>
+          <Link to="/services/Πρόσωπο" state={{ category: 'Πρόσωπο' }} className="feature col service-feature-card service-tile-link">
+            <div className="d-flex align-items-center justify-content-left mb-3 mx-2 service-icon-wrap">
+              <svg viewBox="0 0 64 64" width="70" height="70" fill="none" stroke="#322e2e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M32 8c-12 0-20 9-20 22v8c0 11 9 19 20 19s20-8 20-19v-8C52 17 44 8 32 8Z" />
+                <path d="M22 29h.1M42 29h.1M25 42c4 4 10 4 14 0M18 22c4-7 11-11 20-10 5 1 9 4 12 8" />
+              </svg>
+            </div>
+            <h3 className="fs-2 text-black service-title">{t('services.faceTitle')}</h3>
+            <p className="text-black service-desc">{t('services.faceDesc')}</p>
             <span className="service-tile-cta">{t('services.cta')} <span className="service-tile-arrow">→</span></span>
           </Link>
         </div>

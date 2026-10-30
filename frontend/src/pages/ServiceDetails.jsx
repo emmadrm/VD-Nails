@@ -3,7 +3,7 @@ import { useParams, Link, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import '../index.css';
 
-const CATEGORY_KEYS = { 'Χέρια': 'hands', 'Πόδια': 'feet' };
+const CATEGORY_KEYS = { 'Χέρια': 'hands', 'Πόδια': 'feet', 'Πρόσωπο': 'face' };
 
 export default function ServiceDetails() {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';

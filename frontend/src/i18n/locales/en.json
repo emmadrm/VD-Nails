@@ -7,6 +7,7 @@
     "navBooking": "Booking",
     "categoryHands": "Hands",
     "categoryFeet": "Feet",
+    "categoryFace": "Face",
     "login": "Login",
     "myProfile": "My Profile",
     "logout": "Logout",
@@ -52,7 +53,7 @@
     "stepsEyebrow": "How it works",
     "stepsTitle": "Three simple steps",
     "step1Title": "Choose a Service",
-    "step1Desc": "Browse our hand and foot care services.",
+    "step1Desc": "Browse our hand, foot and facial care services.",
     "step2Title": "Book Online",
     "step2Desc": "Pick the day and time that suits you, in just a few seconds.",
     "step3Title": "Enjoy the Result",
@@ -63,16 +64,19 @@
   "services": {
     "eyebrow": "Services",
     "title": "Our Services",
-    "subtitle": "Specialized care for hands and feet.",
+    "subtitle": "Specialized care for hands, feet and face.",
     "handsTitle": "Hand Care",
     "handsDesc": "Details about our hand care service.",
     "feetTitle": "Foot Care",
     "feetDesc": "Details about our foot care service.",
+    "faceTitle": "Facial Care",
+    "faceDesc": "Discover our facial care services.",
     "cta": "See more"
   },
   "categories": {
     "hands": "Hands",
-    "feet": "Feet"
+    "feet": "Feet",
+    "face": "Face"
   },
   "serviceDetails": {
     "selectBtn": "Select"

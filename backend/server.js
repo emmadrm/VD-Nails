@@ -1105,7 +1105,7 @@ app.delete('/api/products/:id', verifyAdmin, async (req, res) => {
 
 app.get('/api/services', async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM services WHERE category <> 'Πρόσωπο' ORDER BY category, id ASC");
+    const result = await pool.query('SELECT * FROM services ORDER BY category, id ASC');
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: "Σφάλμα" }); }
 });
